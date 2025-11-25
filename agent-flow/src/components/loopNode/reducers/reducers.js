@@ -183,3 +183,41 @@ export const UpdateRadioInfoReducer = () => {
 
   return self;
 };
+
+/**
+ * 更新循环配置 Reducer
+ */
+export const UpdateLoopConfigReducer = (shape) => {
+  const self = {};
+  self.type = 'updateLoopConfig';
+
+  self.reduce = (config, action) => {
+    // 直接更新 shape.flowMeta，因为这些数据不一定在 config (jadeConfig) 中
+    // 也可以同步更新 config 中的某个字段如果需要
+    if (shape && shape.flowMeta) {
+        shape.flowMeta.loopConfig = {
+            ...shape.flowMeta.loopConfig,
+            ...action.payload
+        };
+    }
+    // 返回 config 保持不变，或者如果有需要在 config 中展示的也可以更新
+    return {...config};
+  };
+  return self;
+};
+
+/**
+ * 更新子画布数据 Reducer
+ */
+export const UpdateSubCanvasDataReducer = (shape) => {
+  const self = {};
+  self.type = 'updateSubCanvasData';
+
+  self.reduce = (config, action) => {
+    if (shape && shape.flowMeta) {
+        shape.flowMeta.subCanvasData = action.data;
+    }
+    return {...config};
+  };
+  return self;
+};

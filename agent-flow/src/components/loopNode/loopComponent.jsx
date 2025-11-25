@@ -6,7 +6,14 @@
 
 import LoopWrapper from '@/components/loopNode/LoopWrapper.jsx';
 import {ChangeFlowMetaReducer} from '@/components/common/reducers/commonReducers.js';
-import {ChangePluginByMetaDataReducer, DeletePluginReducer, UpdateInputReducer, UpdateRadioInfoReducer} from '@/components/loopNode/reducers/reducers.js';
+import {
+  ChangePluginByMetaDataReducer, 
+  DeletePluginReducer, 
+  UpdateInputReducer, 
+  UpdateRadioInfoReducer,
+  UpdateLoopConfigReducer,
+  UpdateSubCanvasDataReducer
+} from '@/components/loopNode/reducers/reducers.js';
 import {defaultComponent} from '@/components/defaultComponent.js';
 import {v4 as uuidv4} from 'uuid';
 import {DATA_TYPES, DEFAULT_ADD_TOOL_NODE_CONTEXT, FROM_TYPE} from '@/common/Consts.js';
@@ -20,6 +27,8 @@ export const loopComponent = (jadeConfig, shape) => {
   addReducer(builtInReducers, UpdateInputReducer(shape, self));
   addReducer(builtInReducers, UpdateRadioInfoReducer(shape, self));
   addReducer(builtInReducers, ChangeFlowMetaReducer(shape, self));
+  addReducer(builtInReducers, UpdateLoopConfigReducer(shape, self));
+  addReducer(builtInReducers, UpdateSubCanvasDataReducer(shape, self));
 
   /**
    * 必填

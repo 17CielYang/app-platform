@@ -70,8 +70,8 @@ const LoopWrapper = ({shapeStatus}) => {
   
   const currentHeightRef = useRef(initialHeight); // 用于闭包访问
   const canvasDivRef = useRef(null); // Ref for the height-controlled div
+  const wrapperRef = useRef(null); // Ref for the wrapper container
   const errorSuppressorRef = useRef(null); // 保存错误抑制器的清理函数
-  const handleRef = useRef(null); // 拖拽手柄 ref
 
   const handleLoopCountChange = (value) => {
     dispatch({
@@ -101,7 +101,8 @@ const LoopWrapper = ({shapeStatus}) => {
     });
   };
 
-  const handleResizeStart = (e) => {
+  // 创建拖拽处理函数，支持8个方向
+  const createResizeHandler = (direction) => (e) => {
     if (shapeStatus.disabled) return;
     e.preventDefault();
     e.stopPropagation();
@@ -110,22 +111,26 @@ const LoopWrapper = ({shapeStatus}) => {
     const startY = e.clientY;
     const startWidth = shape.width;
     const startHeight = canvasHeight;
+    const startXPos = shape.x || 0;
+    const startYPos = shape.y || 0;
     const scale = shape.page.scaleX || 1;
     
     let rafId = null;
     let currentH = startHeight;
     let currentW = startWidth;
+    let currentX = startXPos;
+    let currentY = startYPos;
     
     // 开始拖拽时启用错误抑制
     isResizing = true;
     errorSuppressorRef.current = suppressResizeObserverError();
     
     // 捕获指针，避免鼠标移出时中断拖拽
-    handleRef.current?.setPointerCapture?.(e.pointerId);
+    e.target?.setPointerCapture?.(e.pointerId);
 
     // 添加 will-change 优化性能
     if (canvasDivRef.current) {
-      canvasDivRef.current.style.willChange = 'height';
+      canvasDivRef.current.style.willChange = 'height, width';
     }
     
     const handlePointerMove = (moveEvent) => {
@@ -138,20 +143,82 @@ const LoopWrapper = ({shapeStatus}) => {
         const deltaX = (moveEvent.clientX - startX) / scale;
         const deltaY = (moveEvent.clientY - startY) / scale;
         
-        const newWidth = Math.max(300, startWidth + deltaX);
-        const newHeight = Math.max(300, startHeight + deltaY);
+        let newWidth = startWidth;
+        let newHeight = startHeight;
+        let newX = startXPos;
+        let newY = startYPos;
+        
+        // 根据方向计算新的宽度、高度和位置
+        switch (direction) {
+          case 'n': // 上边缘
+            newHeight = Math.max(300, startHeight - deltaY);
+            newY = startYPos + deltaY; // 向下移动节点以保持子画布位置
+            break;
+          case 's': // 下边缘
+            newHeight = Math.max(300, startHeight + deltaY);
+            break;
+          case 'w': // 左边缘
+            newWidth = Math.max(300, startWidth - deltaX);
+            newX = startXPos + deltaX; // 向右移动节点以保持子画布位置
+            break;
+          case 'e': // 右边缘
+            newWidth = Math.max(300, startWidth + deltaX);
+            break;
+          case 'nw': // 左上角
+            newWidth = Math.max(300, startWidth - deltaX);
+            newHeight = Math.max(300, startHeight - deltaY);
+            newX = startXPos + deltaX;
+            newY = startYPos + deltaY;
+            break;
+          case 'ne': // 右上角
+            newWidth = Math.max(300, startWidth + deltaX);
+            newHeight = Math.max(300, startHeight - deltaY);
+            newY = startYPos + deltaY;
+            break;
+          case 'sw': // 左下角
+            newWidth = Math.max(300, startWidth - deltaX);
+            newHeight = Math.max(300, startHeight + deltaY);
+            newX = startXPos + deltaX;
+            break;
+          case 'se': // 右下角
+            newWidth = Math.max(300, startWidth + deltaX);
+            newHeight = Math.max(300, startHeight + deltaY);
+            break;
+        }
         
         currentH = newHeight;
         currentW = newWidth;
+        currentX = newX;
+        currentY = newY;
         currentHeightRef.current = newHeight;
         
-        // 只更新 shape.width，不调用 resize（避免触发 ResizeObserver）
-        shape.width = newWidth;
-
-        // 只更新 DOM style，不更新 React state（避免触发 React 渲染和 ResizeObserver）
+        // 更新 DOM style，不更新 React state（避免触发 React 渲染）
         if (canvasDivRef.current) {
-           canvasDivRef.current.style.height = `${newHeight}px`;
+          canvasDivRef.current.style.height = `${newHeight}px`;
         }
+        
+        // 实时更新节点尺寸和位置（和宽度一样简单直接）
+        shape.width = newWidth;
+        // 计算节点高度 = Header高度 + 子画布高度 + reactContainer的上下margin (12px)
+        // 获取 Header 的实际高度
+        let headerHeight = 0;
+        if (shape.drawer?.reactContainer) {
+          const headerElement = shape.drawer.reactContainer.querySelector('.react-node-header');
+          if (headerElement) {
+            headerHeight = headerElement.offsetHeight;
+          } else {
+            // 如果找不到 Header，使用估算值（toolbar 24px + description可能30px + padding 16px = 约70px）
+            headerHeight = 70;
+          }
+        } else {
+          headerHeight = 70; // 默认估算值
+        }
+        // 节点高度 = Header高度 + 子画布高度 + reactContainer的上下margin (6px * 2 = 12px)
+        const nodeHeight = headerHeight + newHeight + 56;
+        shape.resize(newWidth, nodeHeight);
+        if (shape.x !== undefined) shape.x = newX;
+        if (shape.y !== undefined) shape.y = newY;
+        shape.invalidateAlone && shape.invalidateAlone();
 
         rafId = null;
       });
@@ -163,7 +230,7 @@ const LoopWrapper = ({shapeStatus}) => {
       window.removeEventListener('pointerup', handlePointerUp, true);
 
       // 释放指针捕获
-      handleRef.current?.releasePointerCapture?.(e.pointerId);
+      e.target?.releasePointerCapture?.(e.pointerId);
       
       if (rafId) {
         cancelAnimationFrame(rafId);
@@ -187,18 +254,35 @@ const LoopWrapper = ({shapeStatus}) => {
         // 同步 React state
         setCanvasHeight(currentHeightRef.current);
         
-        // 统一调用一次 resize，让 Elsa 同步最终尺寸
-        shape.resize(currentW, shape.height);
-        
-        // dispatch 最终配置
-        dispatch({
-          type: 'updateLoopConfig',
-          payload: { canvasHeight: currentHeightRef.current }
+        // 等待 DOM 更新后，计算最终节点高度
+        requestAnimationFrame(() => {
+          // 获取 Header 的实际高度
+          let headerHeight = 0;
+          if (shape.drawer?.reactContainer) {
+            const headerElement = shape.drawer.reactContainer.querySelector('.react-node-header');
+            if (headerElement) {
+              headerHeight = headerElement.offsetHeight;
+            } else {
+              headerHeight = 100; // 默认估算值
+            }
+          } else {
+            headerHeight = 100; // 默认估算值
+          }
+          // 节点高度 = Header高度 + 子画布高度 + reactContainer的上下margin (12px)
+          const finalHeight = headerHeight + currentH + 56;
+          shape.resize(currentW, finalHeight);
+          shape.invalidateAlone && shape.invalidateAlone();
+          
+          // dispatch 最终配置
+          dispatch({
+            type: 'updateLoopConfig',
+            payload: { canvasHeight: currentHeightRef.current }
+          });
         });
       });
     };
     
-    // 使用 pointer 事件，确保即使鼠标移出手柄也能持续拖拽
+    // 使用 pointer 事件，确保即使鼠标移出也能持续拖拽
     window.addEventListener('pointermove', handlePointerMove, true);
     window.addEventListener('pointerup', handlePointerUp, true);
   };
@@ -233,10 +317,29 @@ const LoopWrapper = ({shapeStatus}) => {
     );
   }
 
+  // 边缘和角的拖拽区域样式配置
+  const resizeHandleStyle = {
+    position: 'absolute',
+    zIndex: 10,
+    backgroundColor: 'transparent'
+  };
+
+  const edgeHandleStyle = {
+    ...resizeHandleStyle,
+    backgroundColor: 'transparent'
+  };
+
+  const cornerHandleStyle = {
+    ...resizeHandleStyle,
+    width: '12px',
+    height: '12px',
+    backgroundColor: 'transparent'
+  };
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', minHeight: '100%' }}>
-      <div className="loop-canvas-container" style={{ flex: 1 }}>
-        <div ref={canvasDivRef} style={{ height: canvasHeight, position: 'relative' }}>
+    <div ref={wrapperRef} style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', minHeight: '100%' }}>
+      <div className="loop-canvas-container" style={{ flex: 1, position: 'relative' }}>
+        <div ref={canvasDivRef} style={{ height: canvasHeight, position: 'relative', width: '100%' }}>
           <LoopCanvas 
             shape={shape}
             subCanvasData={subCanvasData} 
@@ -244,28 +347,116 @@ const LoopWrapper = ({shapeStatus}) => {
             readOnly={shapeStatus.disabled}
           />
         </div>
+        
+        {/* 边缘和角的拖拽区域 */}
+        {!shapeStatus.disabled && (
+          <>
+            {/* 上边缘 */}
+            <div
+              onPointerDown={createResizeHandler('n')}
+              style={{
+                ...edgeHandleStyle,
+                top: 0,
+                left: '12px',
+                right: '12px',
+                height: '8px',
+                cursor: 'ns-resize'
+              }}
+              title="拖动调整高度"
+            />
+            
+            {/* 下边缘 */}
+            <div
+              onPointerDown={createResizeHandler('s')}
+              style={{
+                ...edgeHandleStyle,
+                bottom: 0,
+                left: '12px',
+                right: '12px',
+                height: '8px',
+                cursor: 'ns-resize'
+              }}
+              title="拖动调整高度"
+            />
+            
+            {/* 左边缘 */}
+            <div
+              onPointerDown={createResizeHandler('w')}
+              style={{
+                ...edgeHandleStyle,
+                left: 0,
+                top: '12px',
+                bottom: '12px',
+                width: '8px',
+                cursor: 'ew-resize'
+              }}
+              title="拖动调整宽度"
+            />
+            
+            {/* 右边缘 */}
+            <div
+              onPointerDown={createResizeHandler('e')}
+              style={{
+                ...edgeHandleStyle,
+                right: 0,
+                top: '12px',
+                bottom: '12px',
+                width: '8px',
+                cursor: 'ew-resize'
+              }}
+              title="拖动调整宽度"
+            />
+            
+            {/* 左上角 */}
+            <div
+              onPointerDown={createResizeHandler('nw')}
+              style={{
+                ...cornerHandleStyle,
+                top: 0,
+                left: 0,
+                cursor: 'nwse-resize'
+              }}
+              title="拖动调整大小"
+            />
+            
+            {/* 右上角 */}
+            <div
+              onPointerDown={createResizeHandler('ne')}
+              style={{
+                ...cornerHandleStyle,
+                top: 0,
+                right: 0,
+                cursor: 'nesw-resize'
+              }}
+              title="拖动调整大小"
+            />
+            
+            {/* 左下角 */}
+            <div
+              onPointerDown={createResizeHandler('sw')}
+              style={{
+                ...cornerHandleStyle,
+                bottom: 0,
+                left: 0,
+                cursor: 'nesw-resize'
+              }}
+              title="拖动调整大小"
+            />
+            
+            {/* 右下角 */}
+            <div
+              onPointerDown={createResizeHandler('se')}
+              style={{
+                ...cornerHandleStyle,
+                bottom: 0,
+                right: 0,
+                cursor: 'nwse-resize'
+              }}
+              title="拖动调整大小"
+            />
+          </>
+        )}
       </div>
-      
-      {/* Resize Handle */}
-      {!shapeStatus.disabled && (
-        <div
-          ref={handleRef}
-          onPointerDown={handleResizeStart}
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            right: 0,
-            width: '16px',
-            height: '16px',
-            cursor: 'nwse-resize',
-            background: 'linear-gradient(135deg, transparent 50%, #ccc 50%)',
-            zIndex: 10
-          }}
-          title="拖动调整大小"
-        />
-      )}
-
-      {/* Resize Preview Overlay removed */}
     </div>
   );
 };

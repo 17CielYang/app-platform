@@ -12,7 +12,7 @@ import {
   UpdateInputReducer, 
   UpdateRadioInfoReducer,
   UpdateLoopConfigReducer,
-  UpdateSubCanvasDataReducer
+  UpdateSubFlowIdReducer
 } from '@/components/loopNode/reducers/reducers.js';
 import {defaultComponent} from '@/components/defaultComponent.js';
 import {v4 as uuidv4} from 'uuid';
@@ -28,7 +28,7 @@ export const loopComponent = (jadeConfig, shape) => {
   addReducer(builtInReducers, UpdateRadioInfoReducer(shape, self));
   addReducer(builtInReducers, ChangeFlowMetaReducer(shape, self));
   addReducer(builtInReducers, UpdateLoopConfigReducer(shape, self));
-  addReducer(builtInReducers, UpdateSubCanvasDataReducer(shape, self));
+  addReducer(builtInReducers, UpdateSubFlowIdReducer(shape, self));
 
   /**
    * 必填

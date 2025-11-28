@@ -25,7 +25,7 @@ export const loopNodeState = (id, x, y, width, height, parent, drawer) => {
     loopCount: 1,
     initialVariables: {}
   };
-  self.flowMeta.subCanvasData = null;
+  self.flowMeta.subFlowId = null; // 子工作流ID，替代原来的subCanvasData
 
   // 保留原有的 entity 定义，以防兼容性问题，或者作为备用
   const loopNodeEntity = {

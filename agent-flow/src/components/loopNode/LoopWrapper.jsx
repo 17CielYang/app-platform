@@ -51,9 +51,9 @@ const LoopWrapper = ({shapeStatus}) => {
   const shape = useShapeContext();
   const {t} = useTranslation();
   
-  // 从 flowMeta 获取循环配置和子画布数据
+  // 从 flowMeta 获取循环配置和子工作流ID
   const loopConfig = shape.flowMeta?.loopConfig || { loopCount: 1, initialVariables: {} };
-  const subCanvasData = shape.flowMeta?.subCanvasData;
+  const subFlowId = shape.flowMeta?.subFlowId;
 
   const isConfig = useConfigContext();
 
@@ -94,10 +94,10 @@ const LoopWrapper = ({shapeStatus}) => {
     }
   };
 
-  const handleSubCanvasChange = (data) => {
+  const handleSubFlowIdChange = (subFlowId) => {
     dispatch({
-      type: 'updateSubCanvasData',
-      data: data
+      type: 'updateSubFlowId',
+      subFlowId: subFlowId
     });
   };
 
@@ -342,8 +342,8 @@ const LoopWrapper = ({shapeStatus}) => {
         <div ref={canvasDivRef} style={{ height: canvasHeight, position: 'relative', width: '100%' }}>
           <LoopCanvas 
             shape={shape}
-            subCanvasData={subCanvasData} 
-            onDataChange={handleSubCanvasChange}
+            subFlowId={subFlowId} 
+            onSubFlowIdChange={handleSubFlowIdChange}
             readOnly={shapeStatus.disabled}
           />
         </div>

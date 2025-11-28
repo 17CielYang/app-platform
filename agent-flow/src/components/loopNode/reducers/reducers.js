@@ -207,15 +207,15 @@ export const UpdateLoopConfigReducer = (shape) => {
 };
 
 /**
- * 更新子画布数据 Reducer
+ * 更新子工作流ID Reducer
  */
-export const UpdateSubCanvasDataReducer = (shape) => {
+export const UpdateSubFlowIdReducer = (shape) => {
   const self = {};
-  self.type = 'updateSubCanvasData';
+  self.type = 'updateSubFlowId';
 
   self.reduce = (config, action) => {
     if (shape && shape.flowMeta) {
-        shape.flowMeta.subCanvasData = action.data;
+        shape.flowMeta.subFlowId = action.subFlowId;
     }
     return {...config};
   };

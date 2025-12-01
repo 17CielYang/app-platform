@@ -188,7 +188,10 @@ export const questionClassificationCompatibilityProcessor = (shapeData, graph, p
   const process = self.process;
   self.process = () => {
     process.apply(self);
-    self.shapeData.flowMeta.jober.converter.entity.inputParams.find(param => param.name === 'classifyQuestionParam').value.find(questionParam => questionParam.name === 'questionTypeList').value.forEach(b => {
+    const inputParams = self.shapeData.flowMeta.jober.converter.entity.inputParams;
+    const classifyQuestionParam = inputParams?.find(param => param.name === 'classifyQuestionParam');
+    const questionTypeList = classifyQuestionParam?.value?.find(questionParam => questionParam.name === 'questionTypeList');
+    questionTypeList?.value?.forEach(b => {
       if (b.runnable === undefined || b.runnable === null) {
         b.runnable = true;
       }
@@ -286,7 +289,8 @@ export const startNodeCompatibilityProcessor = (shapeData, graph, pageHandler) =
   self.process = () => {
     process.apply(self);
     self.shapeData.deletable = false;
-    self.shapeData.flowMeta.inputParams.find(inputParam => inputParam.name === 'input').value.forEach(item => {
+    const inputParams = self.shapeData.flowMeta.inputParams;
+    inputParams?.find(inputParam => inputParam.name === 'input')?.value?.forEach(item => {
       if (item.name === 'Question') {
         item.displayName = `${i18n?.t('userQuestion') ?? 'userQuestion'}`;
       }
@@ -374,8 +378,8 @@ export const endNodeCompatibilityProcessor = (shapeData, graph, pageHandler) => 
   const updateLlmFlowMetas = (llmNodes) => {
     llmNodes.forEach((v) => {
       const inputParams = v.data.flowMeta.jober.converter.entity.inputParams;
-      const enableLog = inputParams.find(ip => ip.name === 'enableLog');
-      if (!enableLog) {
+      const enableLog = inputParams?.find(ip => ip.name === 'enableLog');
+      if (inputParams && !enableLog) {
         inputParams.push({
           id: uuidv4(),
           from: FROM_TYPE.INPUT,
@@ -399,11 +403,13 @@ export const llmCompatibilityProcessor = (shapeData, graph, pageHandler) => {
   const self = shapeCompatibilityProcessor(shapeData, graph, pageHandler);
 
   const moveWorkFlows2Tools = (inputParams) => {
-    const workflows = inputParams.find(item => item.name === 'workflows');
+    const workflows = inputParams?.find(item => item.name === 'workflows');
     if (workflows && workflows.value.length > 0) {
-      const tools = inputParams.find(item => item.name === 'tools');
-      tools.value.push(...workflows.value);
-      workflows.value = [];
+      const tools = inputParams?.find(item => item.name === 'tools');
+      if (tools) {
+        tools.value.push(...workflows.value);
+        workflows.value = [];
+      }
     }
   };
 
@@ -414,14 +420,14 @@ export const llmCompatibilityProcessor = (shapeData, graph, pageHandler) => {
   self.process = () => {
     process.apply(self);
     const ensureParam = (params, defaultParam) => {
-      const existingParam = params.find(i => i.name === defaultParam.name);
-      if (!existingParam) {
+      const existingParam = params?.find(i => i.name === defaultParam.name);
+      if (params && !existingParam) {
         params.push(JSON.parse(JSON.stringify(defaultParam)));
       }
     };
 
     const addEnableLog = (inputParams) => {
-      if (!inputParams.some(item => item.name === 'enableLog')) {
+      if (inputParams && !inputParams.some(item => item.name === 'enableLog')) {
         inputParams.push({
           id: uuidv4(),
           from: FROM_TYPE.INPUT,
@@ -433,16 +439,23 @@ export const llmCompatibilityProcessor = (shapeData, graph, pageHandler) => {
     }
 
     const inputParams = self.shapeData.flowMeta.jober.converter.entity.inputParams;
-    const outputObject = self.shapeData.flowMeta.jober.converter.entity.outputParams.find(i => i.name === 'output');
-    ensureParam(inputParams, DEFAULT_MAX_MEMORY_ROUNDS);
-    ensureParam(inputParams, DEFAULT_LLM_KNOWLEDGE_BASES);
-    ensureParam(inputParams, DEFAULT_MCP_SERVERS);
-    ensureParam(outputObject.value, DEFAULT_LLM_REFERENCE_OUTPUT);
-    addEnableLog(inputParams);
+    const outputParams = self.shapeData.flowMeta.jober.converter.entity.outputParams;
+    const outputObject = outputParams?.find(i => i.name === 'output');
+    
+    if (inputParams) {
+      ensureParam(inputParams, DEFAULT_MAX_MEMORY_ROUNDS);
+      ensureParam(inputParams, DEFAULT_LLM_KNOWLEDGE_BASES);
+      ensureParam(inputParams, DEFAULT_MCP_SERVERS);
+      addEnableLog(inputParams);
+      moveWorkFlows2Tools(inputParams);
+    }
+    if (outputObject) {
+      ensureParam(outputObject.value, DEFAULT_LLM_REFERENCE_OUTPUT);
+    }
+
     if (!self.shapeData.flowMeta.jober.converter.entity.tempReference) {
       self.shapeData.flowMeta.jober.converter.entity.tempReference = {};
     }
-    moveWorkFlows2Tools(inputParams);
   };
 
   return self;
@@ -465,7 +478,7 @@ export const knowledgeRetrievalCompatibilityProcessor = (shapeData, graph, pageH
 
     const optionParamProcess = () => {
       const optionValue = self.shapeData.flowMeta.jober.converter.entity.inputParams
-        .find(inputParam => inputParam.name === 'option')?.value;
+        ?.find(inputParam => inputParam.name === 'option')?.value;
 
       if (Array.isArray(optionValue) && !optionValue.some(v => v.name === 'groupId')) {
         optionValue.push(DEFAULT_KNOWLEDGE_REPO_GROUP_STRUCT);
@@ -477,7 +490,7 @@ export const knowledgeRetrievalCompatibilityProcessor = (shapeData, graph, pageH
 
       if (Array.isArray(optionValue)) {
         const rerankParamValue = optionValue.find(v => v.name === 'rerankParam')?.value;
-        if (!rerankParamValue.some(v => v.name === 'accessInfo')) {
+        if (rerankParamValue && !rerankParamValue.some(v => v.name === 'accessInfo')) {
           rerankParamValue.push(DEFAULT_KNOWLEDGE_NODE_ACCESS_INFO);
           rerankParamValue.push(DEFAULT_KNOWLEDGE_NODE_RERANK_TOP_N);
         }

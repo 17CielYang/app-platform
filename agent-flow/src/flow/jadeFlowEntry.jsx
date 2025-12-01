@@ -491,7 +491,7 @@ export const JadeFlow = (() => {
    * @return {HTMLElement|HTMLDivElement}
    */
   const getGraphDom = (parentDom) => {
-    const graphDom = document.getElementById('elsa-graph');
+    const graphDom = parentDom.querySelector('#elsa-graph');
     if (graphDom) {
       return graphDom;
     } else {

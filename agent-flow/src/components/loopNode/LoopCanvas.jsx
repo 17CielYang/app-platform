@@ -7,6 +7,7 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {jadeFlowGraph} from '@/flow/jadeFlowGraph.js';
 import httpUtil from '@/components/util/httpUtil.jsx';
+import {JadeFlow} from '../../flow/jadeFlowEntry.jsx';
 
 /**
  * 循环节点内部的子画布组件
@@ -151,9 +152,9 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
           defaultFlowData,
           new Map(),
           (response) => {
-            if (response && response.code === 0 && response.data?.id) {
+            if (response && response.code === 0 && response.data) {
               console.log('[sub-create] success', response.data);
-              resolve(response.data.id);
+              resolve(response.data);
             } else {
               console.error('[sub-create] invalid response', response);
               reject(new Error('Failed to create sub flow'));
@@ -312,37 +313,12 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
     if (graphRef.current) return;
 
     const initGraph = async () => {
-      // 创建独立的画布实例
-      const graph = jadeFlowGraph(containerRef.current, 'loopSubGraph');
-      graphRef.current = graph;
-      
-      // 复用主画布的配置
-      graph.configs = shape.graph.configs;
-      graph.tenant = shape.graph.tenant;
-      graph.i18n = shape.graph.i18n;
-      
-      // 初始化画布
-      await graph.initialize();
-
-      // 创建页面
-      const page = graph.addPage('loopSubPage');
-      
       let subFlowData = null;
 
       // 如果有 subFlowId，通过 ID 加载子工作流数据
       if (subFlowId) {
         try {
           subFlowData = await loadSubFlowData(subFlowId);
-          if (subFlowData) {
-            // 加载子工作流数据
-            graph.deSerialize(subFlowData);
-            console.log('[sub-init] data loaded', {
-              subFlowId,
-              hasPages: !!subFlowData.pages?.length,
-            });
-          } else {
-            console.warn('[sub-init] load returned empty data', subFlowId);
-          }
         } catch (error) {
           console.error('[sub-init] load failed', error);
           // 如果加载失败，继续使用默认结构
@@ -355,24 +331,17 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
           hasSubFlowData: !!subFlowData,
           hasPages: !!subFlowData?.pages?.length,
         });
-        // 初始化默认结构：Start -> End
-        const start = page.createShape('startNodeStart', 50, 100);
-        const end = page.createShape('endNodeEnd', 350, 100);
-        const line = page.createNew('jadeEvent', 0, 0);
-        page.reset(); // 刷新布局
-        line.connect(start.id, 'E', end.id, 'W');
-        
+
         // 如果没有 subFlowId，创建新的子工作流
         if (!subFlowId && !readOnly) {
           try {
-            const newFlowId = await createSubFlow();
+            const newFlowInfo = await createSubFlow();
+            const newFlowId = newFlowInfo?.id || null;
+            subFlowData = newflowInfo?.flowGraph?.appearance || null;
             if (newFlowId) {
-              // 保存初始数据
-              const initialData = page.serialize();
-              const graphData = graph.serialize();
-              await saveSubFlowData(newFlowId, graphData);
               console.log('[sub-init] created new sub flow id', newFlowId);
               // 更新 subFlowId
+              subFlowId = newFlowId;
               currentSubFlowIdRef.current = newFlowId;
               onSubFlowIdChange && onSubFlowIdChange(newFlowId);
             }
@@ -381,11 +350,31 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
           }
         }
       }
-      
-      page.fillScreen();
+
+      try {
+        const flowAgent = await JadeFlow.edit({
+          div: containerRef.current,
+          tenant: shape.graph.tenant,
+          appId: subFlowId,
+          flowConfigData: subFlowData,
+          configs: shape.graph.configs,
+          i18n: shape.graph.i18n,
+          importStatements: [],
+          flowType: 'workflow',
+          readOnly: readOnly
+        });
+
+        graphRef.current = flowAgent.graph;
+        if (graphRef.current) {
+          graphRef.current.collaboration.mute = true;
+        }
+      } catch (error) {
+        console.error('[sub-init] JadeFlow.edit failed', error);
+        return;
+      }
       
       // 监听画布变化事件（使用画布内置的 onChangeCallback）
-      if (!readOnly) {
+      if (!readOnly && graphRef.current) {
         const handleGraphChange = () => {
           // 防抖保存，避免频繁保存
           if (saveTimerRef.current) {
@@ -419,7 +408,7 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         };
         
         // 监听画布的变化事件（通过 dirtied 回调）
-        graph.onChangeCallback = handleGraphChange;
+        graphRef.current.onChangeCallback = handleGraphChange;
       }
     };
 

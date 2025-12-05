@@ -368,6 +368,41 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         if (graphRef.current) {
           graphRef.current.collaboration.mute = true;
         }
+
+        // 转发事件以复用主应用的弹窗
+        const forwardEvent = (eventType) => (e) => {
+          console.log('[LoopCanvas] forwardEvent debug:', {
+            eventType,
+            receivedEvent: e,
+          });
+          
+          // 防御性处理：确定 payload
+          // 某些版本的 Elsa 或配置可能直接传递 payload 而不是 event 对象
+          let payload = e?.value;
+          
+          if (!payload && e && typeof e === 'object') {
+             // 针对不同事件类型检查特定的回调属性
+             if (e.onAdd || e.onEdit) {
+                 payload = e;
+             }
+          }
+
+          if (payload) {
+            shape.graph.activePage.triggerEvent({
+              type: eventType,
+              value: payload
+            });
+          } else {
+             console.warn('[LoopCanvas] forwardEvent: invalid event structure', eventType, e);
+          }
+        };
+
+        if (flowAgent.onAddInputParam) {
+          flowAgent.onAddInputParam(forwardEvent('ADD_START_INPUT'));
+        }
+        if (flowAgent.onEditInputParam) {
+          flowAgent.onEditInputParam(forwardEvent('EDIT_START_INPUT'));
+        }
       } catch (error) {
         console.error('[sub-init] JadeFlow.edit failed', error);
         return;

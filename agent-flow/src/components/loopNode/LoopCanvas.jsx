@@ -337,7 +337,7 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
           try {
             const newFlowInfo = await createSubFlow();
             const newFlowId = newFlowInfo?.id || null;
-            subFlowData = newflowInfo?.flowGraph?.appearance || null;
+            subFlowData = newFlowInfo?.flowGraph?.appearance || null;
             if (newFlowId) {
               console.log('[sub-init] created new sub flow id', newFlowId);
               // 更新 subFlowId

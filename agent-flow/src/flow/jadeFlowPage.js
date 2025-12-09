@@ -63,7 +63,7 @@ export const jadeFlowPage = (div, graph, name, id) => {
    * @return {*} 开始节点列表.
    */
   self.getStartNodes = () => {
-    return self.sm.getShapes(s => s.type === START_NODE);
+    return self.sm.getShapes(s => s.type === START_NODE || s.type === 'loopStartNode');
   };
 
   /**
@@ -72,7 +72,7 @@ export const jadeFlowPage = (div, graph, name, id) => {
    * @return {*} 开始节点.
    */
   self.getStartNode = () => {
-    return self.sm.findShapeBy(s => s.type === START_NODE);
+    return self.sm.findShapeBy(s => s.type === START_NODE || s.type === 'loopStartNode');
   };
 
   /**

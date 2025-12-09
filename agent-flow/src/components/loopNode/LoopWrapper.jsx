@@ -4,12 +4,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import React, {useState, useRef} from 'react'; // Added useRef
+import React, {useState, useRef, useEffect} from 'react'; // Added useEffect
 import {useConfigContext, useDispatch, useShapeContext} from '@/components/DefaultRoot.jsx';
 import PropTypes from 'prop-types';
-import {Form, Input, InputNumber} from 'antd';
+import {Form, Input, InputNumber, Select} from 'antd'; 
 import LoopCanvas from '@/components/loopNode/LoopCanvas.jsx';
 import {useTranslation} from 'react-i18next';
+import {JadeInputForm} from '@/components/common/JadeInputForm.jsx';
+import {JadeReferenceTreeSelect} from '@/components/common/JadeReferenceTreeSelect.jsx';
+import {v4 as uuidv4} from 'uuid';
+import {DATA_TYPES, FROM_TYPE} from '@/common/Consts.js';
 
 const {TextArea} = Input;
 
@@ -99,6 +103,66 @@ const LoopWrapper = ({shapeStatus}) => {
       type: 'updateSubFlowId',
       subFlowId: subFlowId
     });
+  };
+
+  const [form] = Form.useForm();
+
+  // 确保 inputMappings 是 JadeInputForm 可用的格式
+  const inputItems = (loopConfig.inputMappings || []).map(mapping => {
+      if (!mapping.id) {
+          return {
+              id: uuidv4(),
+              name: mapping.key || '',
+              from: FROM_TYPE.INPUT, // 默认为 Input，因为无法准确解析旧数据
+              value: mapping.value || '',
+              type: DATA_TYPES.STRING,
+          };
+      }
+      return mapping;
+  });
+
+  const updateLoopConfigMappings = (newItems) => {
+      dispatch({
+          type: 'updateLoopConfig',
+          payload: { inputMappings: newItems }
+      });
+  };
+
+  const addItem = (id) => {
+      const newItem = {
+          id,
+          name: '',
+          type: DATA_TYPES.STRING,
+          from: FROM_TYPE.REFERENCE,
+          value: undefined,
+      };
+      updateLoopConfigMappings([...inputItems, newItem]);
+  };
+
+  const updateItem = (id, changes) => {
+      const newItems = inputItems.map(item => {
+          if (item.id === id) {
+              const updatedItem = { ...item };
+              changes.forEach(change => {
+                  updatedItem[change.key] = change.value;
+              });
+              return updatedItem;
+          }
+          return item;
+      });
+      updateLoopConfigMappings(newItems);
+  };
+
+  const deleteItem = (id) => {
+      const newItems = inputItems.filter(item => item.id !== id);
+      updateLoopConfigMappings(newItems);
+  };
+
+  const handleLoopKeyChange = (value) => {
+      dispatch({
+          type: 'updateLoopConfig',
+          payload: { loopKey: value }
+      });
   };
 
   // 创建拖拽处理函数，支持8个方向
@@ -304,15 +368,32 @@ const LoopWrapper = ({shapeStatus}) => {
           />
         </Form.Item>
 
-        <Form.Item label={t('initialVariables') || "初始变量 (JSON)"}>
-          <TextArea
-            rows={4}
-            value={varsJson}
-            onChange={handleVarsChange}
-            disabled={shapeStatus.disabled}
-            placeholder='{"key": "value"}'
-          />
-        </Form.Item>
+        <Form form={form} component={false}>
+            <JadeInputForm
+                shapeStatus={shapeStatus}
+                items={inputItems}
+                addItem={addItem}
+                updateItem={updateItem}
+                deleteItem={deleteItem}
+                content={<div>配置子工作流的输入参数</div>}
+                maxInputLength={1000}
+            />
+            <div style={{ marginTop: 16, padding: '0 12px' }}>
+                <div style={{ marginBottom: 8 }}>{t('loopKey') || "循环项变量 (Loop Item)"}</div>
+                <Select
+                    value={loopConfig.loopKey}
+                    onChange={handleLoopKeyChange}
+                    options={inputItems.filter(item => item.name).map(item => ({ label: item.name, value: item.name }))}
+                    disabled={shapeStatus.disabled}
+                    placeholder="请选择一个输入参数作为循环项"
+                    style={{ width: '100%' }}
+                    allowClear
+                />
+                <div style={{ marginTop: 4, fontSize: 12, color: '#999' }}>
+                    {t('loopKeyTip') || "选中的参数将自动接收循环过程中的当前项"}
+                </div>
+            </div>
+        </Form>
       </div>
     );
   }

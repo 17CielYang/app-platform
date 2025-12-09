@@ -403,6 +403,36 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         if (flowAgent.onEditInputParam) {
           flowAgent.onEditInputParam(forwardEvent('EDIT_START_INPUT'));
         }
+
+        // 如果是新创建的工作流，立即保存一次初始状态
+        if (needInitialSave && !readOnly && subFlowId) {
+          try {
+            console.log('[sub-init] executing initial save for new flow', { subFlowId });
+            const page = graphRef.current.activePage;
+            
+            // 检查是否有开始节点（支持多种类型）
+            const startNodes = page.sm.getShapes(s => s.type === 'startNodeStart');
+            const loopStartNodes = page.sm.getShapes(s => s.type === 'loopStartNode');
+            
+            // 如果存在默认的 startNodeStart，将其移除（因为我们要用 loopStartNode）
+            if (startNodes.length > 0) {
+                console.log('[sub-init] removing default startNodeStart');
+                startNodes.forEach(node => node.remove());
+            }
+
+            // 如果没有 loopStartNode，创建一个
+            if (loopStartNodes.length === 0) {
+                console.log('[sub-init] creating loopStartNode');
+                // 创建自定义循环开始节点
+                page.createShape('loopStartNode', 100, 100);
+            }
+
+            const graphData = graphRef.current.serialize();
+            await saveSubFlowData(subFlowId, graphData);
+          } catch (saveError) {
+            console.error('[sub-init] initial save failed', saveError);
+          }
+        }
       } catch (error) {
         console.error('[sub-init] JadeFlow.edit failed', error);
         return;

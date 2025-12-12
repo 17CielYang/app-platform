@@ -7,6 +7,12 @@
 import {DATA_TYPES, DEFAULT_ADD_TOOL_NODE_CONTEXT, FROM_TYPE} from '@/common/Consts.js';
 import {v4 as uuidv4} from 'uuid';
 
+/**
+ * 循环子流程图模板ID
+ * 用于创建新的循环子工作流实例
+ */
+export const LOOP_SUB_FLOW_TEMPLATE_ID = '55555555555555555555555555555555';
+
 export const DEFAULT_INPUT_PARAMS = [
   {
     id: uuidv4(),

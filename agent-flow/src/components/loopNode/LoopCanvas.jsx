@@ -8,6 +8,7 @@ import React, {useEffect, useRef, useState} from 'react';
 import {jadeFlowGraph} from '@/flow/jadeFlowGraph.js';
 import httpUtil from '@/components/util/httpUtil.jsx';
 import {JadeFlow} from '../../flow/jadeFlowEntry.jsx';
+import {LOOP_SUB_FLOW_TEMPLATE_ID} from './LoopConsts.js';
 
 /**
  * 循环节点内部的子画布组件
@@ -134,8 +135,8 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
       setLoading(true);
       const tenantId = shape.graph.tenant;
       const baseUrl = getApiBaseUrl();
-      const apiUrl = `${baseUrl}/api/jober/v1/api/${tenantId}/app/df87073b9bc85a48a9b01eccc9afccc3`;
-      console.log('[sub-create] start request', {apiUrl, tenantId});
+      const apiUrl = `${baseUrl}/api/jober/v1/api/${tenantId}/app/${LOOP_SUB_FLOW_TEMPLATE_ID}`;
+      console.log('[sub-create] start request', {apiUrl, tenantId, templateId: LOOP_SUB_FLOW_TEMPLATE_ID});
       
       // 创建默认的工作流配置
       const defaultFlowData = {
@@ -367,6 +368,8 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         graphRef.current = flowAgent.graph;
         if (graphRef.current) {
           graphRef.current.collaboration.mute = true;
+          // 保存父循环节点引用，供循环结束节点使用
+          graphRef.current.parentLoopNode = shape;
         }
 
         // 转发事件以复用主应用的弹窗

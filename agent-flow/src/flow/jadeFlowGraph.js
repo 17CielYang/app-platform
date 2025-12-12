@@ -66,6 +66,9 @@ import {variableUpdaterComponent} from '@/components/variableUpdater/variableUpd
 import {replyNodeState} from '@/components/replyNode/replyNodeState.jsx';
 import {replyNodeComponent} from '@/components/replyNode/replyNodeComponent.jsx';
 import {loopStartNode} from '@/components/loopNode/loopStartNode.jsx';
+import {loopStartComponent} from '@/components/loopNode/loopStartComponent.jsx';
+import {loopEndNodeEnd} from '@/components/loopNode/loopEndNodeEnd.jsx';
+import {loopEndComponent} from '@/components/loopNode/loopEndComponent.jsx';
 
 /**
  * jadeFlow的专用画布.
@@ -179,6 +182,9 @@ export const jadeFlowGraph = (div, title) => {
     self.registerPlugin('replyNodeState', replyNodeState);
     self.registerPlugin('replyNodeComponent', replyNodeComponent);
     self.registerPlugin('loopStartNode', loopStartNode);
+    self.registerPlugin('loopStartComponent', loopStartComponent);
+    self.registerPlugin('loopEndNodeEnd', loopEndNodeEnd);
+    self.registerPlugin('loopEndComponent', loopEndComponent);
     return initialize.apply(self);
   };
 

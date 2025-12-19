@@ -101,6 +101,8 @@ export const JadeInputTree = (
     radioTitle,
     updateRadioInfo,
     radioRuleMessage,
+    treeFilter,
+    typeFilter,
   }) => {
   const {t} = useTranslation();
   const shape = useShapeContext();
@@ -130,6 +132,8 @@ export const JadeInputTree = (
         onDelete={onDelete}
         showRadio={showRadio}
         radioTitle={radioTitle}  // 传递状态
+        treeFilter={treeFilter}
+        typeFilter={typeFilter}
       />
     </>);
   };
@@ -211,7 +215,7 @@ JadeInputTree.propTypes = {
  * @return {JSX.Element}
  * @constructor
  */
-const TreeTitle = ({node, sameLevelNodes, updateItem, shapeStatus, getOptions, onDelete, showRadio = false, radioTitle}) => {
+const TreeTitle = ({node, sameLevelNodes, updateItem, shapeStatus, getOptions, onDelete, showRadio = false, radioTitle, treeFilter, typeFilter}) => {
   const inputWidth = INPUT_WIDTH - (node.level * LEVEL_DISTANCE);
   const form = useFormContext();
   const {t} = useTranslation();
@@ -335,6 +339,8 @@ const TreeTitle = ({node, sameLevelNodes, updateItem, shapeStatus, getOptions, o
         onReferencedKeyChange={(e) => onReferenceKeyChange(e)}
         onReferencedValueChange={(referenceKey, value, type) => onReferenceValueChange(referenceKey, value, type)}
         width={100}
+        treeFilter={treeFilter}
+        typeFilter={typeFilter}
       />;
     } else {
       return null;
@@ -406,6 +412,8 @@ TreeTitle.propTypes = {
   shapeStatus: PropTypes.object.isRequired,
   getOptions: PropTypes.func,
   onDelete: PropTypes.func,
+  treeFilter: PropTypes.func,
+  typeFilter: PropTypes.func,
 };
 
 /**

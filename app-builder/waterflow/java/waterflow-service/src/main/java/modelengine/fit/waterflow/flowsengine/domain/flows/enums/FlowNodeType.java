@@ -66,8 +66,13 @@ public enum FlowNodeType {
      * @return FlowNodeType
      */
     public static FlowNodeType getNodeType(String code) {
+        String upper = code.toUpperCase(ROOT);
+        // 兼容循环子流程入口节点，映射为 START 处理
+        if (upper.contains("LOOPSTART")) {
+            return FlowNodeType.START;
+        }
         return Arrays.stream(values())
-                .filter(value -> code.toUpperCase(ROOT).endsWith(value.getCode()))
+                .filter(value -> upper.endsWith(value.getCode()))
                 .findFirst()
                 .orElseThrow(() -> new WaterflowParamException(ENUM_CONVERT_FAILED, "FlowNodeType", code));
     }

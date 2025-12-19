@@ -52,6 +52,8 @@ public class JadeShape {
         JSONArray inputParams = this.getInputParam();
         if (inputParams != null) {
             this.params = this.extractingExpandObject(this.getInputParam());
+        } else {
+            this.params = new HashMap<>();
         }
     }
 

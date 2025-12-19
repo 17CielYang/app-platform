@@ -23,10 +23,19 @@ public class JadeConfig {
     private final List<JadePage> pages = new ArrayList<>();
 
     public JadeConfig(String appearance) {
-        JSONArray pageArray = JSONObject.parseObject(appearance).getJSONArray("pages");
-        for (int j = 0; j < pageArray.size(); j++) {
-            JSONObject node = pageArray.getJSONObject(j);
-            this.pages.add(new JadePage(node));
+        if (appearance == null) {
+            return;
+        }
+        JSONObject jsonObject = JSONObject.parseObject(appearance);
+        if (jsonObject == null) {
+            return;
+        }
+        JSONArray pageArray = jsonObject.getJSONArray("pages");
+        if (pageArray != null) {
+            for (int j = 0; j < pageArray.size(); j++) {
+                JSONObject node = pageArray.getJSONObject(j);
+                this.pages.add(new JadePage(node));
+            }
         }
     }
 

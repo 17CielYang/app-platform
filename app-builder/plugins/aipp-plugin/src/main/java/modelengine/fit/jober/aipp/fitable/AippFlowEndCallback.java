@@ -116,6 +116,16 @@ public class AippFlowEndCallback implements FlowCallbackService {
         Map<String, Object> businessData = DataUtils.getBusiness(contexts);
         log.debug("AippFlowEndCallback businessData {}", businessData);
 
+        // 检查是否是循环结束节点
+        String loopNodeInstanceId = ObjectUtils.cast(businessData.get("loopNodeInstanceId"));
+        boolean isLoopEndNode = StringUtils.isNotBlank(loopNodeInstanceId);
+        
+        if (isLoopEndNode) {
+            // 循环结束节点：收集本次迭代的输出变量
+            this.handleLoopEndNode(businessData, loopNodeInstanceId);
+            return; // 循环结束节点不执行后续的日志输出等操作
+        }
+
         String versionId = ObjectUtils.cast(businessData.get(AippConst.BS_META_VERSION_ID_KEY));
         OperationContext context =
                 JsonUtils.parseObject(
@@ -194,6 +204,32 @@ public class AippFlowEndCallback implements FlowCallbackService {
     private boolean isExistParent(Map<String, Object> businessData) {
         return businessData.containsKey(AippConst.PARENT_INSTANCE_ID) && StringUtils.isNotBlank(ObjectUtils.cast(
                 businessData.get(AippConst.PARENT_INSTANCE_ID)));
+    }
+
+    /**
+     * 处理循环结束节点
+     * 收集本次迭代的输出变量并添加到循环节点的结果缓存中
+     *
+     * @param businessData 业务数据
+     * @param loopNodeInstanceId 循环节点实例ID
+     */
+    private void handleLoopEndNode(Map<String, Object> businessData, String loopNodeInstanceId) {
+        log.info("Handling loop end node, loopNodeInstanceId: {}", loopNodeInstanceId);
+        
+        // 获取 finalOutput（循环结束节点配置的输出变量）
+        Object finalOutput = businessData.get(AippConst.BS_AIPP_FINAL_OUTPUT);
+        
+        if (finalOutput == null) {
+            log.warn("Loop end node has no finalOutput, loopNodeInstanceId: {}", loopNodeInstanceId);
+            // 即使没有 finalOutput，也添加一个空结果，保证循环节点能继续执行
+            SubFlowLoopFitable.addIterationResult(loopNodeInstanceId, null);
+            return;
+        }
+        
+        // 将本次迭代的结果添加到循环节点的结果缓存中
+        SubFlowLoopFitable.addIterationResult(loopNodeInstanceId, finalOutput);
+        log.info("Added iteration result for loop node instance: {}, result: {}", 
+                loopNodeInstanceId, finalOutput);
     }
 
     private void logFinalOutput(Map<String, Object> businessData, String aippInstId) {

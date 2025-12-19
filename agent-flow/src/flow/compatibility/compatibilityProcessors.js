@@ -46,6 +46,8 @@ export const pageCompatibilityProcessor = (pageData, graph) => {
     switch (shapeData.type) {
       case 'endNodeEnd':
         return endNodeCompatibilityProcessor(shapeData, g, self);
+      case 'loopEndNodeEnd':
+        return loopEndNodeCompatibilityProcessor(shapeData, g, self);
       case 'llmNodeState':
         return llmCompatibilityProcessor(shapeData, g, self);
       case 'conditionNodeCondition':
@@ -288,7 +290,8 @@ export const startNodeCompatibilityProcessor = (shapeData, graph, pageHandler) =
   const process = self.process;
   self.process = () => {
     process.apply(self);
-    self.shapeData.deletable = false;
+    // 允许删除开始节点
+    self.shapeData.deletable = true;
     const inputParams = self.shapeData.flowMeta.inputParams;
     inputParams?.find(inputParam => inputParam.name === 'input')?.value?.forEach(item => {
       if (item.name === 'Question') {
@@ -389,6 +392,56 @@ export const endNodeCompatibilityProcessor = (shapeData, graph, pageHandler) => 
         });
       }
     });
+  };
+
+  return self;
+};
+
+/**
+ * 循环结束节点兼容性处理器.
+ * 与结束节点类似，但不添加 enableLog（禁止输出结果到对话）
+ *
+ * @override
+ */
+export const loopEndNodeCompatibilityProcessor = (shapeData, graph, pageHandler) => {
+  const self = shapeCompatibilityProcessor(shapeData, graph, pageHandler);
+
+  /**
+   * @override
+   */
+  const process = self.process;
+  self.process = () => {
+    process.apply(self);
+    self.shapeData.deletable = true;
+    if (graph.flowType === FLOW_TYPE.WORK_FLOW) {
+      return;
+    }
+    const inputParams = self.shapeData.flowMeta.callback.converter.entity.inputParams;
+    const mode = getEndNodeType(inputParams);
+    if (mode === END_NODE_TYPE.MANUAL_CHECK) {
+      return;
+    }
+    const inputParam = inputParams[0];
+    // 注意：循环结束节点不添加 enableLog，禁止输出结果到对话
+    if (inputParam.from === FROM_TYPE.EXPAND) {
+      inputParam.value.forEach(item => item.isRequired = true);
+      return;
+    }
+    const prevInput = {...inputParam};
+    const id = uuidv4();
+    inputParam.id = uuidv4();
+    inputParam.from = FROM_TYPE.EXPAND;
+    inputParam.type = DATA_TYPES.OBJECT;
+    inputParam.editable = false;
+    inputParam.value = [getDefaultReference(id)];
+    inputParam.isRequired = false;
+    inputParam.referenceNode = '';
+    inputParam.referenceKey = '';
+    inputParam.referenceId = '';
+    Object.keys(prevInput).forEach(k => {
+      inputParam.value[0][k] = prevInput[k];
+    });
+    inputParam.value.forEach(item => item.isRequired = true);
   };
 
   return self;

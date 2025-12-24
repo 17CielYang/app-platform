@@ -8,6 +8,7 @@ package modelengine.fit.jober.aipp.domains.jadeconfig;
 
 import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.EvaluationStartNodeInputParamsExtractor;
 import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.InputParamsExtractor;
+import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.LoopStartNodeInputParamsExtractor;
 import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.NullInputParamsExtractor;
 import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.StartNodeInputParamsExtractor;
 import modelengine.fit.jober.aipp.domains.jadeconfig.extractors.StateNodeInputParamsExtractor;
@@ -42,6 +43,8 @@ public class JadeShape {
             .put("conditionNodeCondition", new NullInputParamsExtractor())
             .put("manualCheckNodeState", new TaskNodeInputParamsExtractor())
             .put("intelligentFormNodeState", new TaskNodeInputParamsExtractor())
+            .put("loopStartNode", new LoopStartNodeInputParamsExtractor())
+            .put("loopEndNodeEnd", new NullInputParamsExtractor())
             .build();
 
     private final JSONObject shape;

@@ -17,6 +17,7 @@ import modelengine.fit.waterflow.flowsengine.domain.flows.parsers.nodes.jobers.H
 import modelengine.fit.waterflow.flowsengine.domain.flows.parsers.nodes.jobers.JoberParser;
 import modelengine.fit.waterflow.flowsengine.domain.flows.parsers.nodes.jobers.OhScriptJoberParser;
 import modelengine.fit.waterflow.flowsengine.domain.flows.parsers.nodes.jobers.StoreJoberParser;
+import modelengine.fit.waterflow.flowsengine.domain.flows.parsers.nodes.jobers.SubFlowLoopJoberParser;
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.EchoJoberRule;
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.GeneralJoberRule;
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.GenericableJoberRule;
@@ -24,6 +25,7 @@ import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jober
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.JoberRule;
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.OhScriptJoberRule;
 import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.StoreJoberRule;
+import modelengine.fit.waterflow.flowsengine.domain.flows.validators.rules.jobers.SubFlowLoopJoberRule;
 
 import java.util.Arrays;
 import java.util.Locale;
@@ -42,6 +44,7 @@ public enum FlowJoberType {
     OHSCRIPT_JOBER("OHSCRIPT_JOBER", new OhScriptJoberParser(), new OhScriptJoberRule()),
     GENERICABLE_JOBER("GENERICABLE_JOBER", new GenericableJoberParser(), new GenericableJoberRule()),
     STORE_JOBER("STORE_JOBER", new StoreJoberParser(), new StoreJoberRule()),
+    SUB_FLOW_LOOP_JOBER("SUB_FLOW_LOOP_JOBER", new SubFlowLoopJoberParser(), new SubFlowLoopJoberRule()),
     ;
 
     private final String code;

@@ -62,6 +62,7 @@ import modelengine.fitframework.util.ObjectUtils;
 import modelengine.fitframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -252,25 +253,31 @@ public class AppTask implements AppTaskRunnable {
     }
 
     private Map<String, Object> buildLogInfos(RunContext runContext) {
-        FlowInfo flowInfo = this.flowsService.getFlows(this.entity.getFlowDefinitionId(),
-                runContext.getOperationContext());
-        List<String> names = flowInfo.getInputParamsByName("input")
-                .stream()
-                .map(AppInputParam::from)
-                .map(AppInputParam::getName)
-                .toList();
-        if (CollectionUtils.isEmpty(names)) {
+        try {
+            FlowInfo flowInfo = this.flowsService.getFlows(this.entity.getFlowDefinitionId(),
+                    runContext.getOperationContext());
+            List<String> names = flowInfo.getInputParamsByName("input")
+                    .stream()
+                    .map(AppInputParam::from)
+                    .map(AppInputParam::getName)
+                    .toList();
+            if (CollectionUtils.isEmpty(names)) {
+                return new HashMap<>();
+            }
+            Map<String, Object> inputParams = new HashMap<>();
+            runContext.getBusinessData()
+                    .entrySet()
+                    .stream()
+                    .filter(data -> names.contains(data.getKey()))
+                    .forEach(data -> inputParams.put(data.getKey(), data.getValue()));
+            Map<String, Object> infos = new HashMap<>();
+            infos.put(BUSINESS_INPUT_KEY, inputParams);
+            return infos;
+        } catch (ClassCastException e) {
+            // 循环子流程等特殊流程的 inputParams 格式可能不同，忽略错误返回空
+            log.warn("Failed to build log infos due to inputParams format issue, returning empty map: {}", e.getMessage());
             return new HashMap<>();
         }
-        Map<String, Object> inputParams = new HashMap<>();
-        runContext.getBusinessData()
-                .entrySet()
-                .stream()
-                .filter(data -> names.contains(data.getKey()))
-                .forEach(data -> inputParams.put(data.getKey(), data.getValue()));
-        Map<String, Object> infos = new HashMap<>();
-        infos.put(BUSINESS_INPUT_KEY, inputParams);
-        return infos;
     }
 
     private void persistAippFormLog(RunContext context, AppTaskInstance instance) {
@@ -339,6 +346,10 @@ public class AppTask implements AppTaskRunnable {
         try {
             FlowInfo flowInfo = this.flowsService.getFlows(flowDefinitionId, context);
             return flowInfo.getInputParamsByName(AippConst.MEMORY_CONFIG_KEY);
+        } catch (ClassCastException e) {
+            // 循环子流程等特殊流程的 inputParams 格式可能不同，返回空列表
+            log.warn("Failed to get memory configs due to inputParams format issue, returning empty list: {}", e.getMessage());
+            return new ArrayList<>();
         } catch (JobberException e) {
             log.error("get flow failed, flowDefinitionId {}", flowDefinitionId);
             throw new AippException(context, AippErrCode.OBTAIN_APP_ORCHESTRATION_INFO_FAILED);

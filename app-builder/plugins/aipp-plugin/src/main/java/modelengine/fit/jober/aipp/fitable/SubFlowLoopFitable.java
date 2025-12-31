@@ -10,6 +10,14 @@ import modelengine.fit.jane.common.entity.OperationContext;
 import modelengine.fit.jober.aipp.constants.AippConst;
 import modelengine.fit.jober.aipp.dto.AppIdentifier;
 import modelengine.fit.jober.aipp.service.AppSyncInvokerService;
+import modelengine.fit.jober.aipp.domains.appversion.service.AppVersionService;
+import modelengine.fit.jober.aipp.domains.appversion.AppVersion;
+import modelengine.fit.jober.aipp.domains.task.AppTask;
+import modelengine.fit.jober.aipp.converters.ConverterFactory;
+import modelengine.fit.jober.aipp.dto.AippDto;
+import modelengine.fit.jober.aipp.dto.AppBuilderAppDto;
+import modelengine.fit.jober.aipp.util.ConvertUtils;
+import modelengine.fit.waterflow.spi.FlowableService;
 import modelengine.fitframework.annotation.Component;
 import modelengine.fitframework.annotation.Fit;
 import modelengine.fitframework.annotation.Fitable;
@@ -18,6 +26,8 @@ import modelengine.fitframework.util.CollectionUtils;
 import modelengine.fitframework.util.MapBuilder;
 import modelengine.fitframework.util.ObjectUtils;
 import modelengine.fitframework.util.StringUtils;
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,19 +43,25 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2025/12/10
  */
 @Component
-public class SubFlowLoopFitable {
+public class SubFlowLoopFitable implements FlowableService {
     private static final Logger log = Logger.get(SubFlowLoopFitable.class);
     
     private static final String SUB_FLOW_ID_KEY = "subFlowId";
     private static final String LOOP_COUNT_KEY = "loopCount";
     private static final String INITIAL_VARIABLES_KEY = "initialVariables";
     private static final String LOOP_NODE_INSTANCE_ID_KEY = "loopNodeInstanceId";
-    
+
     private final AppSyncInvokerService appSyncInvokerService;
+    private final AppVersionService appVersionService;
+    private final ConverterFactory converterFactory;
 
     @Fit
-    public SubFlowLoopFitable(AppSyncInvokerService appSyncInvokerService) {
+    public SubFlowLoopFitable(AppSyncInvokerService appSyncInvokerService,
+                              AppVersionService appVersionService,
+                              ConverterFactory converterFactory) {
         this.appSyncInvokerService = appSyncInvokerService;
+        this.appVersionService = appVersionService;
+        this.converterFactory = converterFactory;
     }
     
     /**
@@ -53,27 +69,36 @@ public class SubFlowLoopFitable {
      * Key: loopNodeInstanceId, Value: List<Object> 迭代结果列表
      */
     private static final Map<String, List<Object>> loopResultsCache = new ConcurrentHashMap<>();
-    
+
+    @Override
     @SuppressWarnings("unused")
     @Fitable("modelengine.fit.jober.aipp.fitable.SubFlowLoopFitable")
-    public List<Map<String, Object>> execute(List<Map<String, Object>> contexts) {
+    public List<Map<String, Object>> handleTask(List<Map<String, Object>> contexts) {
         if (CollectionUtils.isEmpty(contexts)) {
             return contexts;
         }
-        
-        Map<String, Object> businessData = contexts.get(0);
+
+        Map<String, Object> flowData = contexts.get(0);
+        log.info("SubFlowLoopFitable flowData keys: {}", flowData.keySet());
+
+        // 获取 businessData
+        Map<String, Object> businessData = ObjectUtils.cast(flowData.get("businessData"));
+        if (businessData == null) {
+            log.error("businessData is null in flowData");
+            return contexts;
+        }
+        log.info("SubFlowLoopFitable businessData keys: {}", businessData.keySet());
+
         Map<String, Object> inputParams = ObjectUtils.cast(businessData.get(AippConst.BS_INIT_CONTEXT_KEY));
         if (inputParams == null) {
             inputParams = new HashMap<>();
         }
-        
-        // 从 properties 中获取循环配置（这些配置应该在节点定义时设置）
-        // 注意：这里需要从节点的 properties 中获取，而不是从 inputParams
-        // 但由于 fitable 的调用方式，我们需要从 businessData 或其他地方获取
-        // 暂时从 inputParams 中获取，实际应该从节点配置中获取
+        log.info("SubFlowLoopFitable inputParams: {}", inputParams);
+
+        // 从 inputParams 中获取循环配置
         String subFlowId = ObjectUtils.cast(inputParams.get(SUB_FLOW_ID_KEY));
         if (StringUtils.isBlank(subFlowId)) {
-            log.error("Sub flow ID is required for loop node");
+            log.error("Sub flow ID is required for loop node, inputParams={}", inputParams);
             return contexts;
         }
         
@@ -92,31 +117,156 @@ public class SubFlowLoopFitable {
             }
         }
         
-        // 获取初始变量
+        // 获取初始变量（从循环节点配置中获取）
         Map<String, Object> initialVariables = new HashMap<>();
         Object initialVarsObj = inputParams.get(INITIAL_VARIABLES_KEY);
         if (initialVarsObj instanceof Map) {
             initialVariables = ObjectUtils.cast(initialVarsObj);
         }
-        
-        // 获取租户ID和版本ID
-        OperationContext operationContext = ObjectUtils.cast(businessData.get(AippConst.BS_HTTP_CONTEXT_KEY));
-        if (operationContext == null) {
-            log.error("Operation context is required");
-            return contexts;
+
+        // ⭐ 将主流程的变量也传递给子流程，让子流程能访问主流程的开始节点变量
+        // 从 businessData 中提取主流程的 startNodeInputParams（包含 Question 等开始节点的输入）
+        Object startNodeInputParamsObj = businessData.get("startNodeInputParams");
+        if (startNodeInputParamsObj instanceof Map) {
+            Map<String, Object> startNodeInputParams = ObjectUtils.cast(startNodeInputParamsObj);
+            log.info("Found startNodeInputParams from main flow: {}", startNodeInputParams.keySet());
+            // 将主流程的开始节点变量合并到 initialVariables 中
+            // 注意：initialVariables 的配置优先级更高，会覆盖同名的主流程变量
+            for (Map.Entry<String, Object> entry : startNodeInputParams.entrySet()) {
+                if (!initialVariables.containsKey(entry.getKey())) {
+                    initialVariables.put(entry.getKey(), entry.getValue());
+                }
+            }
+        } else {
+            log.info("No startNodeInputParams found in businessData, checking for Question directly");
+            // 兜底：直接从 businessData 中获取常见的变量（如 Question）
+            Object question = businessData.get("Question");
+            if (question != null && !initialVariables.containsKey("Question")) {
+                initialVariables.put("Question", question);
+                log.info("Added Question from businessData: {}", question);
+            }
         }
-        String tenantId = operationContext.getTenantId();
-        String versionId = ObjectUtils.cast(businessData.get(AippConst.BS_META_VERSION_ID_KEY));
-        
+
+        // 构造 OperationContext
+        // 从 businessData 中提取租户ID和用户ID等信息
+        String tenantId = null;
+        String userId = null;
+
+        // 尝试从 http_context 字段获取（可能是 OperationContext 对象或 JSON 字符串）
+        Object httpContextObj = businessData.get(AippConst.BS_HTTP_CONTEXT_KEY);
+        OperationContext operationContext = null;
+
+        if (httpContextObj instanceof OperationContext) {
+            // 直接是 OperationContext 对象
+            operationContext = (OperationContext) httpContextObj;
+            tenantId = operationContext.getTenantId();
+            userId = operationContext.getOperator();
+            log.info("Got OperationContext from http_context: tenantId={}, userId={}", tenantId, userId);
+        } else if (httpContextObj instanceof String) {
+            // 是 JSON 字符串，需要解析
+            try {
+                JSONObject httpContextJson = JSON.parseObject((String) httpContextObj);
+                tenantId = httpContextJson.getString("tenantId");
+                userId = httpContextJson.getString("operator");
+
+                // 构造 OperationContext
+                operationContext = new OperationContext();
+                operationContext.setTenantId(tenantId);
+                operationContext.setOperator(userId);
+                operationContext.setGlobalUserId(httpContextJson.getString("globalUserId"));
+                operationContext.setAccount(httpContextJson.getString("account"));
+                operationContext.setEmployeeNumber(httpContextJson.getString("employeeNumber"));
+                operationContext.setName(httpContextJson.getString("name"));
+                operationContext.setOperatorIp(httpContextJson.getString("operatorIp"));
+                operationContext.setSourcePlatform(httpContextJson.getString("sourcePlatform"));
+                operationContext.setLanguage(httpContextJson.getString("language"));
+
+                log.info("Parsed OperationContext from JSON: tenantId={}, userId={}", tenantId, userId);
+            } catch (Exception e) {
+                log.error("Failed to parse http_context JSON: {}", httpContextObj, e);
+            }
+        }
+
+        // 如果还是获取不到 tenantId，尝试从其他字段获取
         if (StringUtils.isBlank(tenantId)) {
-            log.error("Tenant ID and operation context are required");
+            // 尝试从 context 字段解析
+            Object contextObj = businessData.get("context");
+            if (contextObj instanceof Map) {
+                Map<String, Object> contextMap = ObjectUtils.cast(contextObj);
+                Object tenantIdObj = contextMap.get("tenantId");
+                if (tenantIdObj != null) {
+                    tenantId = String.valueOf(tenantIdObj);
+                    log.info("Got tenantId from context map: {}", tenantId);
+                }
+            }
+
+            // 尝试从 userId 字段获取用户ID
+            if (StringUtils.isBlank(userId)) {
+                Object userIdObj = businessData.get("userId");
+                if (userIdObj != null) {
+                    userId = String.valueOf(userIdObj);
+                    log.info("Got userId from businessData: {}", userId);
+                }
+            }
+
+            // 如果 operationContext 还是 null，构造一个
+            if (operationContext == null) {
+                operationContext = new OperationContext();
+                operationContext.setTenantId(tenantId);
+                operationContext.setOperator(userId);
+            } else {
+                // 更新已有的 operationContext
+                if (StringUtils.isNotBlank(tenantId)) {
+                    operationContext.setTenantId(tenantId);
+                }
+                if (StringUtils.isNotBlank(userId)) {
+                    operationContext.setOperator(userId);
+                }
+            }
+        }
+
+        String versionId = ObjectUtils.cast(businessData.get(AippConst.BS_META_VERSION_ID_KEY));
+
+        if (StringUtils.isBlank(tenantId)) {
+            log.error("Tenant ID is required after parsing all sources, http_context: {}", httpContextObj);
             return contexts;
         }
-        
+
+        // ⭐ 自动为子流程创建预览版（如果不存在）并获取子流程的 app_suite_id 和 version
+        // 如果当前主流程在调试模式下运行，子流程也需要有预览版才能被调用
+        String subFlowAppSuiteId;
+        String subFlowVersion;
+        try {
+            log.info("Checking if subflow {} has preview version for loop execution", subFlowId);
+            AppVersion subFlowAppVersion = this.appVersionService.retrieval(subFlowId);
+
+            // 获取子流程的 app_suite_id（前端传入的 subFlowId 可能是 app_id）
+            subFlowAppSuiteId = subFlowAppVersion.getData().getAppSuiteId();
+            log.info("Subflow app_suite_id: {}", subFlowAppSuiteId);
+
+            // 检查子流程是否被修改过（需要更新 flow_definition）
+            if (subFlowAppVersion.isUpdated()) {
+                log.info("Subflow {} has updates, creating preview version automatically", subFlowId);
+                subFlowAppVersion.updateFlows(operationContext);
+                log.info("Successfully created preview version for subflow {}", subFlowId);
+            } else {
+                log.debug("Subflow {} preview version already exists", subFlowId);
+            }
+
+            // 获取子流程最新的 AppTask 的 version（这是实际的预览版本号，如 "1.0.0-preview-xxx"）
+            AppTask latestTask = subFlowAppVersion.getLatestTask(operationContext);
+            subFlowVersion = latestTask.getEntity().getVersion();
+            log.info("Using subflow version: {}", subFlowVersion);
+        } catch (Exception e) {
+            log.error("Failed to prepare subflow {} for loop execution: {}",
+                    subFlowId, e.getMessage(), e);
+            throw new RuntimeException(
+                    "Failed to prepare subflow for loop execution: " + e.getMessage(), e);
+        }
+
         // 生成循环节点实例ID，用于标识本次循环执行
-        String loopNodeInstanceId = StringUtils.format("loop_{0}_{1}", 
-                ObjectUtils.cast(businessData.get(AippConst.BS_AIPP_INST_ID_KEY)), 
-                System.currentTimeMillis());
+        String parentInstanceId = ObjectUtils.cast(businessData.get(AippConst.BS_AIPP_INST_ID_KEY));
+        String loopNodeInstanceId = "loop_" + parentInstanceId + "_" + System.currentTimeMillis();
         
         // 初始化结果列表
         List<Object> iterationResults = new ArrayList<>();
@@ -125,54 +275,73 @@ public class SubFlowLoopFitable {
         try {
             // 执行循环
             for (int i = 0; i < loopCount; i++) {
-                log.info("Loop iteration {}/{} for subFlow {}, instanceId: {}", 
-                        i + 1, loopCount, subFlowId, loopNodeInstanceId);
+                log.info("Loop iteration [index={}, total={}] for subFlow {} (app_suite_id={}), instanceId: {}",
+                        i + 1, loopCount, subFlowId, subFlowAppSuiteId, loopNodeInstanceId);
                 
-                // 构建子工作流的输入参数
-                Map<String, Object> subFlowInputParams = new HashMap<>(initialVariables);
-                // 添加循环迭代索引
+                // ⭐ 构建子工作流的输入参数
+                // 关键修改：initialVariables 已经包含了主流程的变量（如 Question）
+                // 我们需要确保这些变量被传递到子流程的 businessData
+                Map<String, Object> subFlowInputParams = new HashMap<>();
+
+                // 先添加循环相关的特殊变量
                 subFlowInputParams.put("_loopIndex", i);
                 subFlowInputParams.put("_loopCount", loopCount);
-                // 添加循环节点实例ID，供循环结束节点使用
                 subFlowInputParams.put(LOOP_NODE_INSTANCE_ID_KEY, loopNodeInstanceId);
-                // 添加父实例ID
-                String parentInstanceId = ObjectUtils.cast(businessData.get(AippConst.BS_AIPP_INST_ID_KEY));
                 if (StringUtils.isNotBlank(parentInstanceId)) {
                     subFlowInputParams.put(AippConst.PARENT_INSTANCE_ID, parentInstanceId);
                 }
-                
-                // 构建初始化上下文
+
+                // ⭐ 然后添加 initialVariables（包含主流程的变量）
+                // 注意：这样循环变量的优先级会高于主流程变量
+                subFlowInputParams.putAll(initialVariables);
+
+                // ⭐ 构建初始化上下文
+                // createAippInstance 会将 initContext.get(BS_INIT_CONTEXT_KEY) 作为 businessData
+                // 所以我们必须将所有变量都放入 BS_INIT_CONTEXT_KEY
                 Map<String, Object> initContext = MapBuilder.<String, Object>get()
                         .put(AippConst.BS_INIT_CONTEXT_KEY, subFlowInputParams)
                         .build();
-                
-                // 调用子工作流
-                AppIdentifier appIdentifier = new AppIdentifier(tenantId, subFlowId, versionId);
+
+                log.info("Calling subflow iteration: index=" + (i + 1) + " total=" + loopCount);
+
+                // 调用子工作流，使用子流程的 app_suite_id 和 version
+                AppIdentifier appIdentifier = new AppIdentifier(tenantId, subFlowAppSuiteId, subFlowVersion);
                 long timeout = 300000; // 5分钟超时
-                
+
                 // 注意：子工作流的执行结果会通过 AippFlowEndCallback 收集到 loopResultsCache 中
                 // 这里调用是同步的，会等待子工作流执行完成
                 @SuppressWarnings("unused")
                 Object iterationResult = appSyncInvokerService.invoke(
-                        appIdentifier, 
-                        initContext, 
-                        timeout, 
+                        appIdentifier,
+                        initContext,
+                        timeout,
                         operationContext
                 );
-                
-                log.info("Loop iteration {}/{} completed for subFlow {}", i + 1, loopCount, subFlowId);
+
+                log.info("Subflow invocation returned, result type: {}",
+                        iterationResult == null ? "null" : iterationResult.getClass().getName());
+
+                log.info("Loop iteration [index={}, total={}] completed for subFlow {} (app_suite_id={})",
+                        i + 1, loopCount, subFlowId, subFlowAppSuiteId);
             }
             
             // 从缓存中获取所有迭代结果
             List<Object> finalResults = loopResultsCache.remove(loopNodeInstanceId);
+            log.info("Retrieved loop results from cache for instance {}, result count: {}",
+                    loopNodeInstanceId, finalResults == null ? 0 : finalResults.size());
+
             if (finalResults == null || finalResults.isEmpty()) {
                 log.warn("No results collected for loop node instance {}, using empty list", loopNodeInstanceId);
                 finalResults = new ArrayList<>();
+            } else {
+                log.info("Final loop results: {}", finalResults);
             }
-            
+
             // 将结果聚合为数组，放入 businessData
             businessData.put("result", finalResults);
-            
+            log.info("Loop node execution completed. Final results added to businessData with key 'result', total iterations: {}",
+                    loopCount);
+
             // 返回更新后的 contexts
             return contexts;
             
@@ -180,7 +349,7 @@ public class SubFlowLoopFitable {
             // 清理缓存
             loopResultsCache.remove(loopNodeInstanceId);
             log.error("Error executing loop node: {}", e.getMessage(), e);
-            throw new RuntimeException(StringUtils.format("Loop execution failed: {0}", e.getMessage()), e);
+            throw new RuntimeException("Loop execution failed: " + e.getMessage(), e);
         }
     }
     

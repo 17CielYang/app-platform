@@ -119,10 +119,21 @@ public class AippFlowEndCallback implements FlowCallbackService {
         // 检查是否是循环结束节点
         String loopNodeInstanceId = ObjectUtils.cast(businessData.get("loopNodeInstanceId"));
         boolean isLoopEndNode = StringUtils.isNotBlank(loopNodeInstanceId);
-        
+
         if (isLoopEndNode) {
             // 循环结束节点：收集本次迭代的输出变量
             this.handleLoopEndNode(businessData, loopNodeInstanceId);
+
+            // ⭐ 循环结束后需要继续执行父回调，通知主流程循环迭代已完成
+            // 子流程 callback 主流程
+            String parentCallbackId = ObjectUtils.cast(businessData.get(AippConst.PARENT_CALLBACK_ID));
+            if (StringUtils.isNotEmpty(parentCallbackId)) {
+                log.info("Loop end node triggering parent callback: {}", parentCallbackId);
+                this.brokerClient.getRouter(FlowCallbackService.class, "w8onlgq9xsw13jce4wvbcz3kbmjv3tuw")
+                        .route(new FitableIdFilter(parentCallbackId))
+                        .format(SerializationFormat.CBOR)
+                        .invoke(contexts);
+            }
             return; // 循环结束节点不执行后续的日志输出等操作
         }
 

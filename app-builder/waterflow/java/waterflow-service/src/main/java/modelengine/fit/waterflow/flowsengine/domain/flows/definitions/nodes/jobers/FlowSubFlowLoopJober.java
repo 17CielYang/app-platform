@@ -70,6 +70,9 @@ public class FlowSubFlowLoopJober extends FlowJober {
                     if (loopConfigJson.containsKey("initialVariables")) {
                         inputParams.put("initialVariables", loopConfigJson.get("initialVariables"));
                     }
+                    if (loopConfigJson.containsKey("loopKey")) {
+                        inputParams.put("loopKey", loopConfigJson.get("loopKey"));
+                    }
                 } catch (Exception e) {
                     log.warn("Failed to parse loopConfig: {}", properties.get("loopConfig"), e);
                 }

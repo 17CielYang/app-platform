@@ -123,6 +123,11 @@ public class SubFlowLoopFitable implements FlowableService {
         if (initialVarsObj instanceof Map) {
             initialVariables = ObjectUtils.cast(initialVarsObj);
         }
+        Map<String, Object> loopInputs = ObjectUtils.cast(inputParams.get("args"));
+        if (loopInputs != null && !loopInputs.isEmpty()) {
+            initialVariables.putAll(loopInputs);
+        }
+        String loopKey = ObjectUtils.cast(inputParams.get("loopKey"));
 
         // ⭐ 将主流程的变量也传递给子流程，让子流程能访问主流程的开始节点变量
         // 从 businessData 中提取主流程的 startNodeInputParams（包含 Question 等开始节点的输入）
@@ -294,6 +299,24 @@ public class SubFlowLoopFitable implements FlowableService {
                 // ⭐ 然后添加 initialVariables（包含主流程的变量）
                 // 注意：这样循环变量的优先级会高于主流程变量
                 subFlowInputParams.putAll(initialVariables);
+                if (StringUtils.isNotBlank(loopKey) && initialVariables.containsKey(loopKey)) {
+                    Object loopSource = initialVariables.get(loopKey);
+                    Object loopValue = null;
+                    if (loopSource instanceof List) {
+                        List<?> loopList = ObjectUtils.cast(loopSource);
+                        if (i >= 0 && i < loopList.size()) {
+                            loopValue = loopList.get(i);
+                        }
+                    } else if (loopSource != null && loopSource.getClass().isArray()) {
+                        Object[] loopArray = ObjectUtils.cast(loopSource);
+                        if (i >= 0 && i < loopArray.length) {
+                            loopValue = loopArray[i];
+                        }
+                    }
+                    if (loopValue != null) {
+                        subFlowInputParams.put(loopKey, loopValue);
+                    }
+                }
 
                 // ⭐ 构建初始化上下文
                 // createAippInstance 会将 initContext.get(BS_INIT_CONTEXT_KEY) 作为 businessData

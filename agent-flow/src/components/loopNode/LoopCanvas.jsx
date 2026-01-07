@@ -9,6 +9,9 @@ import {jadeFlowGraph} from '@/flow/jadeFlowGraph.js';
 import httpUtil from '@/components/util/httpUtil.jsx';
 import {JadeFlow} from '../../flow/jadeFlowEntry.jsx';
 import {LOOP_SUB_FLOW_TEMPLATE_ID} from './LoopConsts.js';
+import {recursive} from '@/components/util/ReferenceUtil.js';
+import {v4 as uuidv4} from 'uuid';
+import {VIRTUAL_LOOP_NODE} from '@/common/Consts.js';
 
 /**
  * 循环节点内部的子画布组件
@@ -24,6 +27,8 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
   const [loading, setLoading] = useState(false);
   // 保存定时器引用
   const saveTimerRef = useRef(null);
+  // 输出变量同步防抖
+  const outputSyncTimerRef = useRef(null);
   // 当前 subFlowId 的引用，用于在闭包中访问最新值
   const currentSubFlowIdRef = useRef(subFlowId);
 
@@ -314,6 +319,230 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
     }
   };
 
+  /**
+   * 从 subFlow 的结束节点获取输出变量并注册为 loopNode 的 observables
+   */
+  const registerLoopInputVariables = () => {
+    if (!graphRef.current || !shape) {
+      return;
+    }
+    const page = graphRef.current.activePage;
+    if (!page) {
+      return;
+    }
+
+    const loopConfig = shape.flowMeta?.loopConfig || {};
+    const inputMappings = Array.isArray(loopConfig.inputMappings) ? loopConfig.inputMappings : [];
+    const loopKey = loopConfig.loopKey;
+    const observableIds = new Set();
+
+    inputMappings.forEach(item => {
+      if (!item || !item.id || !item.name) {
+        return;
+      }
+      observableIds.add(item.id);
+      page.registerObservable({
+        nodeId: VIRTUAL_LOOP_NODE.id,
+        observableId: item.id,
+        value: item.name,
+        type: item.type || 'String',
+        parentId: null,
+      });
+    });
+
+    if (loopKey && !inputMappings.some(item => item?.name === loopKey)) {
+      const loopKeyId = `loopKey_${loopKey}`;
+      observableIds.add(loopKeyId);
+      page.registerObservable({
+        nodeId: VIRTUAL_LOOP_NODE.id,
+        observableId: loopKeyId,
+        value: loopKey,
+        type: 'String',
+        parentId: null,
+      });
+    }
+
+    const prevIds = graphRef.current.loopInputObservableIds || [];
+    prevIds.forEach(id => {
+      if (!observableIds.has(id)) {
+        page.removeObservable(VIRTUAL_LOOP_NODE.id, id);
+      }
+    });
+    graphRef.current.loopInputObservableIds = Array.from(observableIds);
+  };
+
+  const registerSubFlowOutputVariables = (retryLeft = 3) => {
+    if (!graphRef.current || !shape) {
+      return;
+    }
+
+    try {
+      // 从 graph 对象中查找循环结束节点
+      const findLoopEndNode = () => {
+        const pages = graphRef.current.pages || [];
+        const pageCandidates = [];
+        if (graphRef.current.activePage) {
+          pageCandidates.push(graphRef.current.activePage);
+        }
+        pages.forEach(page => pageCandidates.push(page));
+        const visited = new Set();
+
+        for (const page of pageCandidates) {
+          if (!page || visited.has(page)) {
+            continue;
+          }
+          visited.add(page);
+          const nodes = page.getNodes ? page.getNodes() : [];
+          let loopEnd = nodes.find(node => node.type === 'loopEndNodeEnd');
+          if (loopEnd) {
+            return loopEnd;
+          }
+          if (page.sm?.getShapes) {
+            loopEnd = page.sm.getShapes(s => s.type === 'loopEndNodeEnd')?.[0] || null;
+            if (loopEnd) {
+              return loopEnd;
+            }
+          }
+        }
+        return null;
+      };
+
+      let loopEndNodeShape = findLoopEndNode();
+
+      if (!loopEndNodeShape) {
+        if (retryLeft > 0) {
+          setTimeout(() => registerSubFlowOutputVariables(retryLeft - 1), 200);
+          return;
+        }
+        console.log('[sub-output] no loopEndNodeEnd found in subFlow');
+        return;
+      }
+
+      // 从结束节点获取输出变量配置
+      // 结束节点的输出变量存储在 jadeConfig.inputParams 中
+      const component = loopEndNodeShape.getComponent();
+      if (!component) {
+        console.log('[sub-output] no component found in loopEndNode');
+        return;
+      }
+
+      const jadeConfig = component.getJadeConfig();
+      if (!jadeConfig || !jadeConfig.inputParams) {
+        console.log('[sub-output] no jadeConfig or inputParams found in loopEndNode');
+        return;
+      }
+
+      // 查找 finalOutput 参数
+      const finalOutput = jadeConfig.inputParams.find(param => param.name === 'finalOutput');
+      if (!finalOutput) {
+        console.log('[sub-output] no finalOutput found in loopEndNode');
+        return;
+      }
+
+      const buildFinalOutputSignature = (output) => {
+        try {
+          return JSON.stringify({
+            type: output?.type,
+            value: output?.value ?? null,
+          });
+        } catch (e) {
+          return null;
+        }
+      };
+
+      const signature = buildFinalOutputSignature(finalOutput);
+      if (signature && graphRef.current.lastSubFlowOutputSignature === signature) {
+        return;
+      }
+      graphRef.current.lastSubFlowOutputSignature = signature;
+
+      // 清除之前注册的 observables
+      shape.page.removeObservable(shape.id);
+
+      const buildOutputItem = (item) => {
+        if (!item) {
+          return null;
+        }
+
+        const itemType = item.type || 'String';
+        const outputItem = {
+          id: item.id || uuidv4(),
+          name: item.name,
+          type: itemType,
+          description: item.description,
+          from: itemType === 'Object' || itemType === 'Array' ? 'Expand' : 'Input',
+          value: [],
+        };
+
+        if (itemType === 'Object' || itemType === 'Array') {
+          const children = Array.isArray(item.value) ? item.value.map(buildOutputItem).filter(Boolean) : [];
+          outputItem.value = children;
+        } else {
+          outputItem.value = '';
+        }
+
+        return outputItem;
+      };
+
+      const syncLoopNodeOutputParams = () => {
+        const existingConfig = shape.drawer?.getLatestJadeConfig?.() || shape.flowMeta?.jober?.converter?.entity;
+        const existingOutputId = existingConfig?.outputParams?.[0]?.id;
+        const outputId = existingOutputId || `output_${uuidv4()}`;
+        const outputType = finalOutput.type === 'Array' ? 'Array' : 'Object';
+        const outputValue = Array.isArray(finalOutput.value)
+          ? finalOutput.value.map(buildOutputItem).filter(Boolean)
+          : [];
+
+        const outputParams = [{
+          id: outputId,
+          name: 'output',
+          type: outputType,
+          from: 'Expand',
+          value: outputValue,
+        }];
+
+        const currentOutput = existingConfig?.outputParams;
+        if (currentOutput && JSON.stringify(currentOutput) === JSON.stringify(outputParams)) {
+          return;
+        }
+
+        if (shape.flowMeta?.jober?.converter?.entity) {
+          shape.flowMeta.jober.converter.entity.outputParams = outputParams;
+        }
+
+        shape.drawer?.dispatch?.({
+          type: 'system_update',
+          changes: [{key: 'outputParams', value: outputParams}],
+        });
+      };
+
+      // 递归注册输出变量为 observables
+      const registerObservable = (nodeData, parent) => {
+        shape.page.registerObservable({
+          nodeId: shape.id,
+          observableId: nodeData.id,
+          value: nodeData.name,
+          type: nodeData.type,
+          parentId: parent ? parent.id : null
+        });
+      };
+
+      // 处理 finalOutput 的值（可能是数组或对象）
+      if (finalOutput.value && Array.isArray(finalOutput.value)) {
+        finalOutput.value.forEach(item => {
+          recursive([item], null, registerObservable);
+        });
+      } else if (finalOutput.type === 'Object' && finalOutput.value) {
+        recursive(finalOutput.value, null, registerObservable);
+      }
+
+      syncLoopNodeOutputParams();
+      console.log('[sub-output] registered output variables from subFlow end node');
+    } catch (error) {
+      console.error('[sub-output] failed to register output variables', error);
+    }
+  };
+
   // 初始化画布
   useEffect(() => {
     if (!containerRef.current) return;
@@ -376,6 +605,28 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
           graphRef.current.collaboration.mute = true;
           // 保存父循环节点引用，供循环结束节点使用
           graphRef.current.parentLoopNode = shape;
+          const page = graphRef.current.activePage;
+          if (page) {
+            let loopEnv = page.getShapeById(VIRTUAL_LOOP_NODE.id);
+            if (!loopEnv && page.createShape) {
+              loopEnv = page.createShape('systemEnv', 0, 0, VIRTUAL_LOOP_NODE.id);
+            }
+            if (loopEnv) {
+              loopEnv.text = shape?.text || '循环';
+              loopEnv.visible = false;
+              loopEnv.serializable = false;
+              loopEnv.moveable = false;
+            }
+          }
+          
+          // 等待 graph 初始化完成后注册 subFlow 的输出变量
+          if (outputSyncTimerRef.current) {
+            clearTimeout(outputSyncTimerRef.current);
+          }
+          outputSyncTimerRef.current = setTimeout(() => {
+            registerLoopInputVariables();
+            registerSubFlowOutputVariables();
+          }, 200);
         }
 
         // 转发事件以复用主应用的弹窗
@@ -453,7 +704,21 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         };
         
         // 监听画布的变化事件（通过 dirtied 回调）
-        graphRef.current.onChangeCallback = handleGraphChange;
+        const originalOnChangeCallback = graphRef.current.onChangeCallback;
+        graphRef.current.onChangeCallback = (dirtyAction) => {
+          if (originalOnChangeCallback) {
+            originalOnChangeCallback(dirtyAction);
+          }
+          handleGraphChange();
+          // 当 subFlow 变化时，重新注册输出变量（延迟执行以确保节点配置已更新）
+          if (outputSyncTimerRef.current) {
+            clearTimeout(outputSyncTimerRef.current);
+          }
+          outputSyncTimerRef.current = setTimeout(() => {
+            registerLoopInputVariables();
+            registerSubFlowOutputVariables();
+          }, 200);
+        };
       }
     };
 
@@ -465,10 +730,18 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         clearTimeout(saveTimerRef.current);
         saveTimerRef.current = null;
       }
+      if (outputSyncTimerRef.current) {
+        clearTimeout(outputSyncTimerRef.current);
+        outputSyncTimerRef.current = null;
+      }
       // 清理画布引用
       if (graphRef.current) {
         graphRef.current.onChangeCallback = null;
         graphRef.current = null;
+      }
+      // 清理 observables
+      if (shape) {
+        shape.page.removeObservable(shape.id);
       }
     };
   }, [subFlowId]); // 当 subFlowId 变化时重新初始化

@@ -53,6 +53,11 @@ export const VIRTUAL_CONTEXT_NODE = {
   name: 'systemEnv',
 };
 
+export const VIRTUAL_LOOP_NODE = {
+  id: '_loopEnv',
+  name: 'loopEnv',
+};
+
 export const VIRTUAL_CONTEXT_NODE_VARIABLES = {
   INSTANCE_ID: 'instanceId',
   APP_ID: 'appId',

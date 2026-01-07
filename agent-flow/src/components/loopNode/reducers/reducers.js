@@ -199,6 +199,8 @@ export const UpdateLoopConfigReducer = (shape) => {
             ...shape.flowMeta.loopConfig,
             ...action.payload
         };
+        shape.properties = shape.properties || {};
+        shape.properties.loopConfig = JSON.stringify(shape.flowMeta.loopConfig);
     }
     // 返回 config 保持不变，或者如果有需要在 config 中展示的也可以更新
     return {...config};
@@ -216,6 +218,8 @@ export const UpdateSubFlowIdReducer = (shape) => {
   self.reduce = (config, action) => {
     if (shape && shape.flowMeta) {
         shape.flowMeta.subFlowId = action.subFlowId;
+        shape.properties = shape.properties || {};
+        shape.properties.subFlowId = action.subFlowId;
     }
     return {...config};
   };

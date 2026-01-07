@@ -6,7 +6,7 @@
 
 import {node} from '@fit-elsa/elsa';
 import {v4 as uuidv4} from 'uuid';
-import {NODE_STATUS, SECTION_TYPE, SOURCE_PLATFORM, VIRTUAL_CONTEXT_NODE} from '@/common/Consts.js';
+import {NODE_STATUS, SECTION_TYPE, SOURCE_PLATFORM, VIRTUAL_CONTEXT_NODE, VIRTUAL_LOOP_NODE} from '@/common/Consts.js';
 import {jadeNodeDrawer} from '@/components/base/jadeNodeDrawer.jsx';
 import {overrideMethods} from '@/components/base/overrides.js';
 import {referenceDecorate} from '@/components/base/references.js';
@@ -203,6 +203,19 @@ export const jadeNode = (id, x, y, width, height, parent, drawer) => {
         runnable: true,
         observableList: self.page.getObservableList(systemEnv.id),
       });
+    }
+    if (self.graph?.parentLoopNode) {
+      const loopEnv = self.page.getShapeById(VIRTUAL_LOOP_NODE.id);
+      if (loopEnv) {
+        loopEnv.runnable = true;
+        preNodeInfos.push({
+          id: loopEnv.id,
+          name: loopEnv.text,
+          node: loopEnv,
+          runnable: true,
+          observableList: self.page.getObservableList(loopEnv.id),
+        });
+      }
     }
     preNodeInfos.shift();
     return preNodeInfos;

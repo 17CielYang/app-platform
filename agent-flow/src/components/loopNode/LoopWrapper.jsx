@@ -126,6 +126,27 @@ const LoopWrapper = ({shapeStatus}) => {
           type: 'updateLoopConfig',
           payload: { inputMappings: newItems }
       });
+
+      const latestConfig = shape.drawer?.getLatestJadeConfig?.();
+      if (!latestConfig || !Array.isArray(latestConfig.inputParams)) {
+          return;
+      }
+
+      const newInputParams = latestConfig.inputParams.map(item => {
+          if (item.name === 'args') {
+              return {
+                  ...item,
+                  value: newItems,
+              };
+          }
+          return item;
+      });
+
+      shape.flowMeta.jober.converter.entity.inputParams = newInputParams;
+      shape.drawer?.dispatch?.({
+          type: 'system_update',
+          changes: [{key: 'inputParams', value: newInputParams}],
+      });
   };
 
   const addItem = (id) => {

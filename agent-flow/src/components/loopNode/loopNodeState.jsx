@@ -18,6 +18,7 @@ export const loopNodeState = (id, x, y, width, height, parent, drawer) => {
   self.type = 'loopNodeState';
   self.text = '循环节点';
   self.componentName = 'loopComponent';
+  self.serializedFields.batchAdd('properties');
   
   // 初始化 flowMeta 中的特定字段
   self.flowMeta.jober.type = 'SUB_FLOW_LOOP_JOBER'; // 修改为新的 Jober 类型
@@ -26,6 +27,13 @@ export const loopNodeState = (id, x, y, width, height, parent, drawer) => {
     initialVariables: {}
   };
   self.flowMeta.subFlowId = null; // 子工作流ID，替代原来的subCanvasData
+  self.properties = self.properties || {};
+  if (self.properties.subFlowId === undefined || self.properties.subFlowId === null) {
+    self.properties.subFlowId = self.flowMeta.subFlowId;
+  }
+  if (self.properties.loopConfig === undefined || self.properties.loopConfig === null) {
+    self.properties.loopConfig = JSON.stringify(self.flowMeta.loopConfig);
+  }
 
   // 保留原有的 entity 定义，以防兼容性问题，或者作为备用
   const loopNodeEntity = {

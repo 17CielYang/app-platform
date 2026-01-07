@@ -17,14 +17,14 @@ const { Panel } = Collapse;
 const MultiConversationContainer = (props) => {
   const { graphOperator, config, updateData, readOnly } = props;
   const [memoryValues, setMemoryValues] = useState(null);
-  const [memorySwitch, setMemorySwitch] = useState(false);
+  const [memorySwitch, setMemorySwitch] = useState(false); // 默认不勾选
   const haveSetMemory = useRef(false);
   const dispatch = useAppDispatch();
   const appConfig = useAppSelector((state) => state.appConfigStore.inputConfigData);
   const historySwitch = useAppSelector((state) => state.commonStore.historySwitch);
   const useMemory = useAppSelector((state) => state.commonStore.useMemory);
   const [form] = Form.useForm();
-  
+
   // 更新Memory
   const updateMemory = (value) => {
     if (config.from === 'graph') {
@@ -56,9 +56,11 @@ const MultiConversationContainer = (props) => {
     if(!memoryValues) {
       return;
     }
-    setMemorySwitch(memoryValues.memorySwitch);
-    dispatch(setHistorySwitch(memoryValues.memorySwitch));
-    form.setFieldsValue(memoryValues);
+    // 强制设置为 false（默认不勾选）
+    setMemorySwitch(false);
+    dispatch(setHistorySwitch(false));
+    const valuesWithSwitchOff = { ...memoryValues, memorySwitch: false };
+    form.setFieldsValue(valuesWithSwitchOff);
     haveSetMemory.current = true;
   }, [memoryValues]);
 
@@ -80,32 +82,8 @@ const MultiConversationContainer = (props) => {
     }
   }, [config, appConfig]);
 
-  return <>
-    <Collapse
-      bordered={false}
-      expandIcon={({ isActive }) => isActive ? <img src={CloseImg} alt="" /> : <img src={OpenImg} alt="" />}
-    >
-      <Panel header={<div className='panel-label'>
-          <span>{config.description}</span>
-          <Switch
-            onChange={(checked, event) => historySwitchChange(checked, event)}
-            checked={memorySwitch}
-            disabled={readOnly}
-          />
-        </div>} forceRender key='memory' className="site-collapse-custom-panel">
-        {
-          memoryValues?.type &&
-          <Form form={form} layout='vertical' disabled={readOnly}>
-            <MultiConversationContent
-              disabled={!historySwitch}
-              onTypeChange={onTypeChange}
-              onValueChange={onValueChange}
-            />
-          </Form>
-        }
-      </Panel>
-    </Collapse>
-  </>
+  // 整个组件隐藏，返回 null
+  return null;
 };
 
 export default MultiConversationContainer;

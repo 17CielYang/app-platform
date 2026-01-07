@@ -34,13 +34,25 @@ const _ModelForm = ({shapeId, modelData, modelOptions, disabled}) => {
   const {t} = useTranslation();
   const startNode = shape.page.sm.findShapeBy(s => s.type === 'startNodeStart');
   const maxMemoryRounds = modelData.maxMemoryRounds;
-  const maxMemoryRoundsValue = parseInt(maxMemoryRounds.value);
-  const [maxTurnsOfStartNode, setMaxTurnsOfStartNode] = useState(startNode.getConversationTurn());
+
+  // 固定使用默认值 3（UI已隐藏）
+  const DEFAULT_MEMORY_ROUNDS = 3;
+  const maxMemoryRoundsValue = DEFAULT_MEMORY_ROUNDS;
+
+  // 如果在子流程中（如循环节点内部），startNode 可能不存在，使用默认值 3
+  const [maxTurnsOfStartNode, setMaxTurnsOfStartNode] = useState(
+    startNode ? startNode.getConversationTurn() : DEFAULT_MEMORY_ROUNDS
+  );
   const [promptOpen, setPromptOpen] = useState(false);
   const [systemPromptOpen, setSystemPromptOpen] = useState(false);
 
   // 实时记录轮次数，用于比较.
   const maxMemoryRoundsValueRef = useRef(maxMemoryRoundsValue);
+
+  // 确保初始值为默认值
+  useEffect(() => {
+    dispatch({type: 'changeConfig', id: maxMemoryRounds.id, value: String(DEFAULT_MEMORY_ROUNDS)});
+  }, []);
 
   const promptContent = (<div className={'jade-font-size'} style={{lineHeight: '1.2'}}>
     <Trans i18nKey='promptPopover' components={{p: <p/>}}/>
@@ -52,19 +64,24 @@ const _ModelForm = ({shapeId, modelData, modelOptions, disabled}) => {
     maxMemoryRoundsValueRef.current = e;
   };
 
-  // 监听开始节点中，对话轮数的修改.
+  // 监听开始节点中，对话轮数的修改（仅在主流程中有效，子流程中无开始节点）.
   useEffect(() => {
-    shape.observeTo('start_node_conversation_turn_count', startNode.id, 'start_node_conversation_turn_count',
-      (args) => {
-        if (args.value === null || args.value === undefined) {
-          return;
-        }
-        setMaxTurnsOfStartNode(args.value);
-        if (args.value < maxMemoryRoundsValueRef.current) {
-          dispatch({type: 'changeConfig', id: maxMemoryRounds.id, value: String(args.value)});
-          maxMemoryRoundsValueRef.current = args.value;
-        }
-      });
+    if (!startNode) {
+      // 在子流程中（如循环节点内部），没有开始节点，跳过监听
+      return;
+    }
+    // 注意：UI已隐藏，不再监听和更新对话轮次
+    // shape.observeTo('start_node_conversation_turn_count', startNode.id, 'start_node_conversation_turn_count',
+    //   (args) => {
+    //     if (args.value === null || args.value === undefined) {
+    //       return;
+    //     }
+    //     setMaxTurnsOfStartNode(args.value);
+    //     if (args.value < maxMemoryRoundsValueRef.current) {
+    //       dispatch({type: 'changeConfig', id: maxMemoryRounds.id, value: String(args.value)});
+    //       maxMemoryRoundsValueRef.current = args.value;
+    //     }
+    //   });
   }, []);
 
   const systemPromptName = `system-prompt-${shapeId}`;
@@ -99,9 +116,10 @@ const _ModelForm = ({shapeId, modelData, modelOptions, disabled}) => {
             disabled={disabled} model={modelData.model} serviceName={modelData.serviceName} tag={modelData.tag} shapeId={shapeId}
             modelOptions={modelOptions}
             temperature={modelData.temperature}/>
-          <DialogueRound
+          {/* DialogueRound 组件已隐藏，固定使用默认值 3 轮 */}
+          {/* <DialogueRound
             maxMemoryRoundsValue={maxMemoryRoundsValue} disabled={disabled} maxTurnsOfStartNode={maxTurnsOfStartNode}
-            shapeId={shapeId} onConversationTurnChange={onConversationTurnChange}/>
+            shapeId={shapeId} onConversationTurnChange={onConversationTurnChange}/> */}
           <Prompt
             prompt={modelData.prompt}
             rules={[{required: true, message: t('paramCannotBeEmpty')}]}

@@ -18,50 +18,32 @@ ByConversationTurn.propTypes = {
 
 /**
  * Memory按对话轮次选取
+ * 注意：UI已隐藏，固定使用默认值 3 轮
  *
  * @param propValue 前端渲染的值
  * @param onValueChange 参数变化所需调用方法
  * @param disabled 禁用.
- * @returns {JSX.Element} Memory按对话轮次的Dom
+ * @returns {JSX.Element} Memory按对话轮次的Dom（已隐藏）
  */
 export default function ByConversationTurn({propValue, onValueChange, disabled, i18n}) {
-    const intValue = parseInt(propValue);
+    const DEFAULT_CONVERSATION_TURN = 3; // 固定默认值
     const shape = useShapeContext && useShapeContext();
 
-    const defaultRecalls = {
-        1: '1', [3]: i18n('default'), 20: '20'
-    };
-
-    // 注册开始节点轮次数.
+    // 注册开始节点轮次数（固定为默认值）
     useEffect(() => {
         shape && shape.page.registerObservable({
             nodeId: shape.id,
             observableId: "start_node_conversation_turn_count",
-            value: !isNaN(intValue) ? intValue : 3,
+            value: DEFAULT_CONVERSATION_TURN,
             type: "number",
             parentId: null,
             visible: false
         });
+        // 确保初始值也设置为默认值
+        onValueChange("Integer", DEFAULT_CONVERSATION_TURN.toString());
+        shape && shape.emit("start_node_conversation_turn_count", {value: DEFAULT_CONVERSATION_TURN});
     }, []);
 
-    // 修改时，emit数据给监听器.
-    const onChange = (e) => {
-        onValueChange("Integer", e.toString());
-        shape && shape.emit("start_node_conversation_turn_count", {value: e});
-    };
-
-    return (<>
-        <div style={{display: 'flex', alignItems: 'center'}}>
-            <Slider style={{width: '95%'}} // 设置固定宽度
-                    min={1}
-                    max={20}
-                    disabled={disabled}
-                    defaultValue={3}
-                    marks={defaultRecalls}
-                    step={1} // 设置步长为1
-                    onChange={onChange}
-                    value={!isNaN(intValue) ? intValue : 3}
-            />
-        </div>
-    </>);
+    // UI 隐藏，返回空元素
+    return null;
 }

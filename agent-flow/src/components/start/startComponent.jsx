@@ -32,31 +32,7 @@ export const startComponent = (jadeConfig) => {
           displayName: '用户问题',
         }],
       },
-      {
-        id: uuidv4(),
-        name: "memory",
-        type: "Object",
-        from: "Expand",
-        value: [{
-          id: uuidv4(),
-          name: "memorySwitch",
-          type: "Boolean",
-          from: "Input",
-          value: true
-        }, {
-          id: uuidv4(),
-          name: "type",
-          type: "String",
-          from: "Input",
-          value: "ByConversationTurn"
-        }, {
-          id: uuidv4(),
-          name: "value",
-          type: "Integer",
-          from: "Input",
-          value: "3"
-        }]
-      }
+      // memory 配置已删除
     ];
   };
 
@@ -172,43 +148,7 @@ export const startComponent = (jadeConfig) => {
       });
     };
 
-    const changeMemorySwitch = () => {
-      return data.map(item => {
-        if (item.name === "memory") {
-          return {
-            ...item, value: item.value.map(memoryItem => {
-              if (memoryItem.name === "memorySwitch") {
-                return {...memoryItem, value: action.value};
-              } else {
-                return memoryItem;
-              }
-            })
-          }
-        } else {
-          return item;
-        }
-      });
-    };
-
-    const changeMemory = () => {
-      return data.map(item => {
-        if (item.name === "memory") {
-          return {
-            ...item, value: item.value.map(memoryItem => {
-              if (memoryItem.name === "type") {
-                return {...memoryItem, value: action.memoryType};
-              } else if (memoryItem.name === "value") {
-                return {...memoryItem, type: action.memoryValueType, value: action.memoryValue};
-              } else {
-                return memoryItem;
-              }
-            })
-          }
-        } else {
-          return item;
-        }
-      });
-    };
+    // changeMemorySwitch 和 changeMemory 函数已删除
 
     const deleteInputParam = () => {
       return data.map(item => {
@@ -253,12 +193,7 @@ export const startComponent = (jadeConfig) => {
       case 'editParam': {
         return updateInputParamById();
       }
-      case 'changeMemory': {
-        return changeMemory();
-      }
-      case 'changeMemorySwitch': {
-        return changeMemorySwitch();
-      }
+      // changeMemory 和 changeMemorySwitch case 已删除
       case 'deleteInputParam': {
         return deleteInputParam();
       }

@@ -153,9 +153,21 @@ const _MemoryConfig = ({memoryConfig, disabled, templateType, isShowUseMemoryTyp
   const dispatch = useDispatch();
   const {t} = useTranslation();
 
+  const DEFAULT_CONVERSATION_TURN = 3; // 固定默认值
+
   const shape = useShapeContext();
   const startNode = shape.page.sm.findShapeBy(s => s.type === 'startNodeStart');
-  const [maxConversationTurn, setMaxConversationTurn] = useState(startNode.getConversationTurn());
+  // 如果在子流程中（如循环节点内部），startNode 可能不存在，使用默认值 3
+  const [maxConversationTurn, setMaxConversationTurn] = useState(
+    startNode ? startNode.getConversationTurn() : DEFAULT_CONVERSATION_TURN
+  );
+
+  // 确保初始值为默认值
+  useEffect(() => {
+    if (selectedOption === BUFFER_WINDOW) {
+      dispatch({actionType: 'changeWindowValue', value: DEFAULT_CONVERSATION_TURN});
+    }
+  }, []);
 
   /**
    * 选择历史记录方式下拉框click回调
@@ -176,27 +188,33 @@ const _MemoryConfig = ({memoryConfig, disabled, templateType, isShowUseMemoryTyp
     dispatch({actionType: 'changeHistoryType', value: e});
   };
 
-  // 监听开始节点中，对话轮数的修改.
+  // 监听开始节点中，对话轮数的修改（仅在主流程中有效，子流程中无开始节点）.
   useEffect(() => {
-    const cancel = shape.observeTo('start_node_conversation_turn_count', startNode.id, 'start_node_conversation_turn_count',
-        (args) => {
-          if (args.value === null || args.value === undefined) {
-            return;
-          }
-          setMaxConversationTurn(args.value);
-        });
-    return () => {
-      cancel();
-    };
+    if (!startNode) {
+      // 在子流程中（如循环节点内部），没有开始节点，跳过监听
+      return;
+    }
+    // 注意：UI已隐藏，不再监听和更新对话轮次
+    // const cancel = shape.observeTo('start_node_conversation_turn_count', startNode.id, 'start_node_conversation_turn_count',
+    //     (args) => {
+    //       if (args.value === null || args.value === undefined) {
+    //         return;
+    //       }
+    //       setMaxConversationTurn(args.value);
+    //     });
+    // return () => {
+    //   cancel();
+    // };
   }, []);
 
   // 对话轮数变化时，如果最大轮次数小于当前的值，将值修改为最大轮次数.
   useEffect(() => {
-    if (selectedOption === BUFFER_WINDOW) {
-      if (maxConversationTurn < propertyValue) {
-        dispatch({actionType: 'changeWindowValue', value: maxConversationTurn});
-      }
-    }
+    // 注意：UI已隐藏，固定使用默认值
+    // if (selectedOption === BUFFER_WINDOW) {
+    //   if (maxConversationTurn < propertyValue) {
+    //     dispatch({actionType: 'changeWindowValue', value: maxConversationTurn});
+    //   }
+    // }
   }, [maxConversationTurn]);
 
   /**
@@ -221,7 +239,8 @@ const _MemoryConfig = ({memoryConfig, disabled, templateType, isShowUseMemoryTyp
 
   return (<>
     <div className={`jade-multi-conversation}`}>
-      {isShowUseMemoryType && <Form.Item
+      {/* 历史记录模式选择已隐藏 */}
+      {/* {isShowUseMemoryType && <Form.Item
         key={itemId}
         className='jade-form-item'
         label={t('selectHistoryRecordMode')}
@@ -239,14 +258,16 @@ const _MemoryConfig = ({memoryConfig, disabled, templateType, isShowUseMemoryTyp
           options={historyOption}
           value={useMemoryType}
         />
-      </Form.Item>}
-      <RadioGroup memoryConfig={memoryConfig} disabled={disabled} selectedOption={selectedOption}
-                  templateType={templateType} useMemoryType={useMemoryType}/>
-      <ConfigSlider
+      </Form.Item>} */}
+      {/* 历史记录方式选择（Radio）已隐藏 */}
+      {/* <RadioGroup memoryConfig={memoryConfig} disabled={disabled} selectedOption={selectedOption}
+                  templateType={templateType} useMemoryType={useMemoryType}/> */}
+      {/* 对话轮次滑块已隐藏，固定使用默认值 3 */}
+      {/* <ConfigSlider
           selectedOption={selectedOption}
           disabled={disabled}
           sliderConfig={getSliderConfig()}
-          propertyValue={propertyValue}/>
+          propertyValue={propertyValue}/> */}
     </div>
   </>);
 };

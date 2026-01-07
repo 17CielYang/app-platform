@@ -11,7 +11,7 @@ import {StartInputForm} from './StartInputForm.jsx';
 import './style.css';
 import {useConfigContext, useDispatch, useShapeContext} from '@/components/DefaultRoot.jsx';
 import {v4 as uuidv4} from 'uuid';
-import MultiConversation from '@/components/start/MultiConversation.jsx';
+// MultiConversation 组件已删除
 import PropTypes from 'prop-types';
 import {Trans, useTranslation} from 'react-i18next';
 import {AppConfiguration} from '@/components/start/AppConfiguration.jsx';
@@ -38,12 +38,7 @@ export default function StartFormWrapper({data, shapeStatus}) {
   const isConfig = useConfigContext();
   const config = shape.graph.configs.find(node => node.node === 'startNodeStart');
   const items = data.find(item => item.name === 'input').value; // 找出 name 为 "input" 的项，获取value值
-  const memory = data.find(item => item.name === 'memory');
-  const memoryId = memory.id;
-  const multiConversationSwitch = memory.value.find(item => item.name === 'memorySwitch');
-  const multiConversationSwitchValue = multiConversationSwitch?.value ?? true;
-  const multiConversationTypeValue = memory.value.find(item => item.name === 'type').value;
-  const multiConversationValueValue = memory.value.find(item => item.name === 'value')?.value ?? null;
+  // memory 相关数据已删除
   const appConfig = data.find(item => item.name === 'appConfig');
 
   const [openItems, setOpenItems] = useState(() => {
@@ -134,28 +129,7 @@ export default function StartFormWrapper({data, shapeStatus}) {
     <Trans i18nKey="startNodeInputPopover" components={{p: <p/>}}/>
   </div>);
 
-  // 处理内部组件值变化的回调函数
-  const handleMultiConversationValueChange = (valueType, newValue) => {
-    dispatch({
-      actionType: 'changeMemory',
-      memoryType: multiConversationTypeValue,
-      memoryValueType: valueType,
-      memoryValue: newValue,
-    });
-  };
-
-  const handleMultiConversationTypeChange = (e, memoryValueType, memoryValue) => {
-    dispatch({
-      actionType: 'changeMemory',
-      memoryType: e,
-      memoryValueType: memoryValueType,
-      memoryValue: memoryValue,
-    });
-  };
-
-  const handleMultiConversationSwitchChange = (e) => {
-    dispatch({actionType: 'changeMemorySwitch', value: e});
-  };
+  // memory 相关的处理函数已删除
 
   /**
    * 添加增加开始节点自定义参数的回调函数
@@ -269,24 +243,7 @@ export default function StartFormWrapper({data, shapeStatus}) {
         </Panel>
       </JadeCollapse>
 
-      <MultiConversation className="jade-multi-conversation"
-                         itemId={memoryId}
-                         disabled={shapeStatus.disabled}
-                         config={config}
-                         props={{
-                           switch: {
-                             value: multiConversationSwitchValue,
-                             onChange: handleMultiConversationSwitchChange,
-                           },
-                           type: {
-                             value: multiConversationTypeValue,
-                             onChange: handleMultiConversationTypeChange,
-                           },
-                           value: {
-                             value: multiConversationValueValue,
-                             onChange: handleMultiConversationValueChange,
-                           },
-                         }}/>
+      {/* MultiConversation 组件已删除 */}
       {appConfig && <AppConfiguration item={appConfig} disabled={shapeStatus.disabled} configs={config.appConfig}/>}
     </div>
   </>);

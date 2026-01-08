@@ -439,12 +439,20 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         return;
       }
 
+      const normalizeOutputConfig = (node) => {
+        if (!node || typeof node !== 'object') {
+          return node;
+        }
+        const {id, ...rest} = node;
+        const value = Array.isArray(rest.value)
+          ? rest.value.map(normalizeOutputConfig)
+          : rest.value;
+        return {...rest, value};
+      };
+
       const buildFinalOutputSignature = (output) => {
         try {
-          return JSON.stringify({
-            type: output?.type,
-            value: output?.value ?? null,
-          });
+          return JSON.stringify(normalizeOutputConfig(output));
         } catch (e) {
           return null;
         }
@@ -488,10 +496,18 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
         const existingConfig = shape.drawer?.getLatestJadeConfig?.() || shape.flowMeta?.jober?.converter?.entity;
         const existingOutputId = existingConfig?.outputParams?.[0]?.id;
         const outputId = existingOutputId || `output_${uuidv4()}`;
-        const outputType = finalOutput.type === 'Array' ? 'Array' : 'Object';
-        const outputValue = Array.isArray(finalOutput.value)
-          ? finalOutput.value.map(buildOutputItem).filter(Boolean)
-          : [];
+        const stateNode = Array.isArray(finalOutput.value)
+          ? finalOutput.value.find(item => item?.name === 'state')
+          : null;
+
+        if (!stateNode || stateNode.type !== 'Object') {
+          console.log('[sub-output] finalOutput.state is required and must be Object');
+          return;
+        }
+
+        const loopStateNode = buildOutputItem({...stateNode, name: 'loopState'});
+        const outputType = 'Object';
+        const outputValue = loopStateNode ? [loopStateNode] : [];
 
         const outputParams = [{
           id: outputId,
@@ -528,12 +544,21 @@ const LoopCanvas = ({shape, subFlowId, onSubFlowIdChange, readOnly}) => {
       };
 
       // 处理 finalOutput 的值（可能是数组或对象）
-      if (finalOutput.value && Array.isArray(finalOutput.value)) {
-        finalOutput.value.forEach(item => {
-          recursive([item], null, registerObservable);
-        });
-      } else if (finalOutput.type === 'Object' && finalOutput.value) {
-        recursive(finalOutput.value, null, registerObservable);
+      const stateNode = Array.isArray(finalOutput.value)
+        ? finalOutput.value.find(item => item?.name === 'state')
+        : null;
+      if (!stateNode || stateNode.type !== 'Object') {
+        console.log('[sub-output] finalOutput.state is required and must be Object');
+        return;
+      }
+
+      const loopStateRoot = {
+        ...stateNode,
+        name: 'loopState',
+      };
+      registerObservable(loopStateRoot, null);
+      if (Array.isArray(loopStateRoot.value)) {
+        recursive(loopStateRoot.value, loopStateRoot, registerObservable);
       }
 
       syncLoopNodeOutputParams();

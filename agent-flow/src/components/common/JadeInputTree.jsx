@@ -252,16 +252,18 @@ const TreeTitle = ({node, sameLevelNodes, updateItem, shapeStatus, getOptions, o
    * @param type 类型.
    */
   const onReferenceValueChange = (referenceKey, value, type) => {
-    updateItem(node.id, [{key: 'referenceKey', value: referenceKey}, {key: 'value', value: value}, {key: 'type', value: type}]);
+    const resolvedType = type || node.type || DATA_TYPES.STRING;
+    updateItem(node.id, [{key: 'referenceKey', value: referenceKey}, {key: 'value', value: value}, {key: 'type', value: resolvedType}]);
   };
 
   /* 当reference的key变化时的处理方法. */
   const onReferenceKeyChange = (e) => {
+    const resolvedType = e.type || node.type || DATA_TYPES.STRING;
     updateItem(node.id, [{key: 'referenceNode', value: e.referenceNode},
       {key: 'referenceId', value: e.referenceId},
       {key: 'referenceKey', value: e.referenceKey},
       {key: 'value', value: e.value},
-      {key: 'type', value: e.type}]);
+      {key: 'type', value: resolvedType}]);
   };
 
   /* 名称变化时触发. */

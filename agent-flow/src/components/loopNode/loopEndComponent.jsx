@@ -6,11 +6,7 @@
 
 import {v4 as uuidv4} from 'uuid';
 import {defaultComponent} from '@/components/defaultComponent.js';
-import {
-  AddInputReducer,
-  DeleteInputReducer,
-  UpdateInputReducer,
-} from '@/components/end/reducers/reducers.js';
+import {UpdateInputReducer} from '@/components/end/reducers/reducers.js';
 import {LoopEndInputForm} from '@/components/loopNode/LoopEndInputForm.jsx';
 import {FLOW_TYPE} from '@/common/Consts.js';
 import {getDefaultReference} from '@/components/util/ReferenceUtil.js';
@@ -49,8 +45,101 @@ export const loopEndComponent = (jadeConfig, shape) => {
     const addReducer = (map, reducer) => map.set(reducer.type, reducer);
     const builtInReducers = new Map();
     addReducer(builtInReducers, UpdateInputReducer(shape, self));
-    addReducer(builtInReducers, DeleteInputReducer(shape, self));
-    addReducer(builtInReducers, AddInputReducer(shape, self));
+
+  const ensureStateWrapper = (config) => {
+    const newConfig = {...config};
+    const inputParams = Array.isArray(newConfig.inputParams) ? [...newConfig.inputParams] : [];
+    const finalOutputIndex = inputParams.findIndex(item => item?.name === 'finalOutput');
+    if (finalOutputIndex === -1) {
+      return newConfig;
+    }
+
+    const finalOutput = {...inputParams[finalOutputIndex]};
+    const currentValue = Array.isArray(finalOutput.value) ? [...finalOutput.value] : [];
+    let stateNode = currentValue.find(item => item?.name === 'state' && item?.type === 'Object');
+
+    if (!stateNode) {
+      stateNode = {
+        id: uuidv4(),
+        name: 'state',
+        type: 'Object',
+        from: 'Expand',
+        value: currentValue,
+      };
+      finalOutput.value = [stateNode];
+      finalOutput.type = 'Object';
+      finalOutput.from = 'Expand';
+    } else if (!Array.isArray(stateNode.value)) {
+      stateNode = {...stateNode, value: []};
+      finalOutput.value = currentValue.map(item => (item?.id === stateNode.id ? stateNode : item));
+    }
+
+    inputParams[finalOutputIndex] = finalOutput;
+    newConfig.inputParams = inputParams;
+    return newConfig;
+  };
+
+  const addLoopEndInputReducer = () => {
+    const reducer = {};
+    reducer.type = 'addInput';
+    reducer.reduce = (config) => {
+      const newConfig = ensureStateWrapper({...config});
+      const finalOutputIndex = newConfig.inputParams.findIndex(item => item?.name === 'finalOutput');
+      if (finalOutputIndex === -1) {
+        return newConfig;
+      }
+
+      const finalOutput = {...newConfig.inputParams[finalOutputIndex]};
+      const stateNode = Array.isArray(finalOutput.value)
+        ? finalOutput.value.find(item => item?.name === 'state' && item?.type === 'Object')
+        : null;
+      if (!stateNode) {
+        return newConfig;
+      }
+
+      const newRefInput = getDefaultReference(uuidv4());
+      newRefInput.isRequired = true;
+      const newStateNode = {
+        ...stateNode,
+        value: Array.isArray(stateNode.value) ? [...stateNode.value, newRefInput] : [newRefInput],
+      };
+      finalOutput.value = finalOutput.value.map(item => (item?.id === stateNode.id ? newStateNode : item));
+      newConfig.inputParams[finalOutputIndex] = finalOutput;
+      return newConfig;
+    };
+    return reducer;
+  };
+
+  const deleteLoopEndInputReducer = () => {
+    const reducer = {};
+    reducer.type = 'deleteInput';
+    reducer.reduce = (config, action) => {
+      const newConfig = ensureStateWrapper({...config});
+      const finalOutputIndex = newConfig.inputParams.findIndex(item => item?.name === 'finalOutput');
+      if (finalOutputIndex === -1) {
+        return newConfig;
+      }
+
+      const finalOutput = {...newConfig.inputParams[finalOutputIndex]};
+      const stateNode = Array.isArray(finalOutput.value)
+        ? finalOutput.value.find(item => item?.name === 'state' && item?.type === 'Object')
+        : null;
+      if (!stateNode) {
+        return newConfig;
+      }
+
+      const newStateNode = {
+        ...stateNode,
+        value: Array.isArray(stateNode.value)
+          ? stateNode.value.filter(item => item?.id !== action.id)
+          : [],
+      };
+      finalOutput.value = finalOutput.value.map(item => (item?.id === stateNode.id ? newStateNode : item));
+      newConfig.inputParams[finalOutputIndex] = finalOutput;
+      return newConfig;
+    };
+    return reducer;
+  };
 
   /**
    * 必填
@@ -58,7 +147,7 @@ export const loopEndComponent = (jadeConfig, shape) => {
    * @return 组件信息
    */
   self.getJadeConfig = () => {
-    return jadeConfig ? jadeConfig : {
+    return jadeConfig ? ensureStateWrapper(jadeConfig) : {
       inputParams: shape.graph.flowType === FLOW_TYPE.APP ?
         self.getDefaultAppInputParams(uuidv4()) : self.getDefaultWorkflowInputParams(),
       outputParams: [{}],
@@ -71,15 +160,22 @@ export const loopEndComponent = (jadeConfig, shape) => {
    * @returns {[{}]} 输入参数.
    */
   self.getDefaultWorkflowInputParams = () => {
+    const stateNode = {
+      id: uuidv4(),
+      name: 'state',
+      type: 'Object',
+      from: 'Expand',
+      value: [getDefaultReference(uuidv4())],
+    };
     return [{
       id: uuidv4(),
       name: 'finalOutput',
-      type: 'String',
-      from: 'Reference',
+      type: 'Object',
+      from: 'Expand',
       referenceNode: '',
       referenceId: '',
       referenceKey: '',
-      value: [],
+      value: [stateNode],
     }];
   };
 
@@ -91,13 +187,20 @@ export const loopEndComponent = (jadeConfig, shape) => {
    * @returns 输入参数.
    */
   self.getDefaultAppInputParams = (id) => {
+    const stateNode = {
+      id: uuidv4(),
+      name: 'state',
+      type: 'Object',
+      from: 'Expand',
+      value: [getDefaultReference(uuidv4())],
+    };
     return [{
       id: uuidv4(),
       name: 'finalOutput',
       from: 'Expand',
       type: 'Object',
       editable: false,
-      value: [getDefaultReference(id)],
+      value: [stateNode],
       isRequired: false,
       referenceNode: '',
       referenceKey: '',
@@ -117,9 +220,16 @@ export const loopEndComponent = (jadeConfig, shape) => {
    */
   const reducers = self.reducers;
   self.reducers = (config, action) => {
+    const normalizedConfig = ensureStateWrapper(config);
     const reducer = builtInReducers.get(action.type);
-    return reducer ? reducer.reduce(config, action) : reducers.apply(self, [config, action]);
+    if (reducer) {
+      return reducer.reduce(normalizedConfig, action);
+    }
+    return reducers.apply(self, [normalizedConfig, action]);
   };
+
+  builtInReducers.set('addInput', addLoopEndInputReducer());
+  builtInReducers.set('deleteInput', deleteLoopEndInputReducer());
 
   return self;
 };

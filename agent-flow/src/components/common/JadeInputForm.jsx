@@ -87,9 +87,10 @@ const _JadeInputForm = (
    * @param type 变化值类型
    */
   const handleReferenceValueChange = (item, referenceKey, value, type) => {
+    const resolvedType = type || item.type || DATA_TYPES.STRING;
     updateItem(item.id, [{key: 'referenceKey', value: referenceKey}, {key: 'value', value: value}, {
       key: 'type',
-      value: type,
+      value: resolvedType,
     }]);
   };
 
@@ -100,9 +101,10 @@ const _JadeInputForm = (
    * @param e 变化值对象
    */
   const handleReferenceKeyChange = (item, e) => {
+    const resolvedType = e.type || item.type || DATA_TYPES.STRING;
     updateItem(item.id, [{key: 'referenceNode', value: e.referenceNode}, {
       key: 'referenceId', value: e.referenceId,
-    }, {key: 'referenceKey', value: e.referenceKey}, {key: 'value', value: e.value}, {key: 'type', value: e.type}]);
+    }, {key: 'referenceKey', value: e.referenceKey}, {key: 'value', value: e.value}, {key: 'type', value: resolvedType}]);
   };
 
   const handleItemChange = (name, value, itemId) => {

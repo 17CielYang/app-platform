@@ -26,6 +26,7 @@ import modelengine.fitframework.util.CollectionUtils;
 import modelengine.fitframework.util.MapBuilder;
 import modelengine.fitframework.util.ObjectUtils;
 import modelengine.fitframework.util.StringUtils;
+import modelengine.fit.jober.common.FlowDataConstant;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 
@@ -276,6 +277,7 @@ public class SubFlowLoopFitable implements FlowableService {
         // 初始化结果列表
         List<Object> iterationResults = new ArrayList<>();
         loopResultsCache.put(loopNodeInstanceId, iterationResults);
+        Map<String, Object> loopState = new HashMap<>();
         
         try {
             // 执行循环
@@ -344,6 +346,15 @@ public class SubFlowLoopFitable implements FlowableService {
                 log.info("Subflow invocation returned, result type: {}",
                         iterationResult == null ? "null" : iterationResult.getClass().getName());
 
+                Map<String, Object> stateUpdate = this.extractLoopState(iterationResult);
+                if (stateUpdate != null && !stateUpdate.isEmpty()) {
+                    initialVariables.putAll(stateUpdate);
+                    loopState.putAll(stateUpdate);
+                    log.info("Updated loop state from iteration result, keys: {}", stateUpdate.keySet());
+                } else {
+                    log.debug("No loop state update found for loop node instance: {}", loopNodeInstanceId);
+                }
+
                 log.info("Loop iteration [index={}, total={}] completed for subFlow {} (app_suite_id={})",
                         i + 1, loopCount, subFlowId, subFlowAppSuiteId);
             }
@@ -361,7 +372,16 @@ public class SubFlowLoopFitable implements FlowableService {
             }
 
             // 将结果聚合为数组，放入 businessData
+            if (!loopState.isEmpty()) {
+                businessData.put("loopState", new HashMap<>(loopState));
+                log.info("Final loop state stored in businessData with key 'loopState', keys: {}",
+                        loopState.keySet());
+            }
             businessData.put("result", finalResults);
+            Map<String, Object> outputData = new HashMap<>();
+            outputData.put("loopState", loopState);
+            outputData.put("result", finalResults);
+            this.updateExecuteInfoOutput(flowData, businessData, outputData);
             log.info("Loop node execution completed. Final results added to businessData with key 'result', total iterations: {}",
                     loopCount);
 
@@ -390,6 +410,62 @@ public class SubFlowLoopFitable implements FlowableService {
         loopResultsCache.computeIfAbsent(loopNodeInstanceId, k -> new ArrayList<>())
                 .add(iterationResult);
         log.debug("Added iteration result for loop node instance: {}", loopNodeInstanceId);
+    }
+
+    private Map<String, Object> extractLoopState(Object iterationResult) {
+        if (!(iterationResult instanceof Map)) {
+            return null;
+        }
+        Map<String, Object> resultMap = ObjectUtils.cast(iterationResult);
+        Object finalOutputObj = resultMap.get(AippConst.BS_AIPP_FINAL_OUTPUT);
+        if (!(finalOutputObj instanceof Map)) {
+            throw new IllegalStateException("Loop state missing: finalOutput is not an object.");
+        }
+        Map<String, Object> finalOutputMap = ObjectUtils.cast(finalOutputObj);
+        Object stateObj = finalOutputMap.get("state");
+        if (stateObj instanceof Map) {
+            return ObjectUtils.cast(stateObj);
+        }
+        throw new IllegalStateException("Loop state missing: finalOutput.state is required.");
+    }
+
+    private void updateExecuteInfoOutput(Map<String, Object> flowData, Map<String, Object> businessData,
+            Map<String, Object> outputData) {
+        String nodeId = ObjectUtils.cast(businessData.get(AippConst.BS_NODE_ID_KEY));
+        if (StringUtils.isBlank(nodeId)) {
+            Map<String, Object> contextData = ObjectUtils.cast(flowData.get(FlowDataConstant.CONTEXT_DATA));
+            if (contextData != null) {
+                nodeId = ObjectUtils.cast(contextData.get(FlowDataConstant.FLOW_NODE_ID));
+            }
+        }
+        if (StringUtils.isBlank(nodeId)) {
+            log.warn("Loop node id missing, skip executeInfo output update.");
+            return;
+        }
+
+        Map<String, Object> internal = ObjectUtils.cast(businessData.get(FlowDataConstant.BUSINESS_DATA_INTERNAL_KEY));
+        if (internal == null) {
+            internal = new HashMap<>();
+            businessData.put(FlowDataConstant.BUSINESS_DATA_INTERNAL_KEY, internal);
+        }
+        Map<String, Object> executeInfo = ObjectUtils.cast(internal.get(FlowDataConstant.INTERNAL_EXECUTE_INFO_KEY));
+        if (executeInfo == null) {
+            executeInfo = new HashMap<>();
+            internal.put(FlowDataConstant.INTERNAL_EXECUTE_INFO_KEY, executeInfo);
+        }
+
+        List<Map<String, Object>> nodeInfos = ObjectUtils.cast(executeInfo.get(nodeId));
+        if (nodeInfos == null || nodeInfos.isEmpty()) {
+            Map<String, Object> nodeInfo = new HashMap<>();
+            nodeInfo.put("output", outputData);
+            List<Map<String, Object>> newInfos = new ArrayList<>();
+            newInfos.add(nodeInfo);
+            executeInfo.put(nodeId, newInfos);
+            return;
+        }
+
+        Map<String, Object> lastInfo = nodeInfos.get(nodeInfos.size() - 1);
+        lastInfo.put("output", outputData);
     }
     
     /**
